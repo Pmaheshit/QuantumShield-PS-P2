@@ -140,10 +140,10 @@ class InventoryReportGenerator:
         lines: list[str] = []
         lines.append("# QuantumShield — Cryptographic Inventory & Migration Report")
         lines.append("")
-        lines.append(f"**Generated:** `{meta['timestamp_utc']}`  ")
-        lines.append(f"**Target Directory:** `{meta['scanned_root']}`  ")
-        lines.append(f"**Files Scanned:** {meta['total_files_scanned']}  ")
-        lines.append(f"**Total Cryptographic Findings:** {meta['total_findings']}  ")
+        lines.append(f"**Generated:** `{meta['timestamp_utc']}`<br>")
+        lines.append(f"**Target Directory:** `{meta['scanned_root']}`<br>")
+        lines.append(f"**Files Scanned:** {meta['total_files_scanned']}<br>")
+        lines.append(f"**Total Cryptographic Findings:** {meta['total_findings']}")
         lines.append("")
 
         # ── Executive Summary ──

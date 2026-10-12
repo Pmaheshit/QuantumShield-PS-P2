@@ -416,33 +416,42 @@ def _build_cli() -> None:
 def _print_table(findings: list[Finding]) -> None:
     """Print a readable summary table to stdout."""
     if not findings:
-        print("No cryptographic API usage detected.")
+        out = "No cryptographic API usage detected.\n"
+        sys.stdout.buffer.write(out.encode("utf-8", errors="replace"))
+        sys.stdout.buffer.flush()
         return
 
     # Risk order for sorting
     order = {RiskLevel.HIGH: 0, RiskLevel.MODERATE: 1, RiskLevel.LOWER: 2, RiskLevel.UNKNOWN: 3}
     findings = sorted(findings, key=lambda f: (order.get(f.risk_level, 9), f.file_path, f.line_number))
 
-    risk_icon = {RiskLevel.HIGH: "🔴", RiskLevel.MODERATE: "🟡", RiskLevel.LOWER: "🟢", RiskLevel.UNKNOWN: "⚪"}
+    risk_icon = {RiskLevel.HIGH: "[HIGH]", RiskLevel.MODERATE: "[MOD ]", RiskLevel.LOWER: "[LOW ]", RiskLevel.UNKNOWN: "[UNK ]"}
 
-    print(f"\n{'─' * 90}")
-    print(f"{'FILE':<35} {'LINE':>5}  {'LANG':<6}  {'ALGORITHM':<10}  {'RISK':<8}  REPLACEMENT")
-    print(f"{'─' * 90}")
+    lines: list[str] = []
+    lines.append("")
+    lines.append("-" * 90)
+    lines.append(f"{'FILE':<35} {'LINE':>5}  {'LANG':<6}  {'ALGORITHM':<10}  {'RISK':<8}  REPLACEMENT")
+    lines.append("-" * 90)
     for f in findings:
-        icon = risk_icon.get(f.risk_level, "⚪")
-        print(
+        icon = risk_icon.get(f.risk_level, "[UNK ]")
+        lines.append(
             f"{f.file_path:<35} {f.line_number:>5}  {f.language:<6}  "
-            f"{f.algorithm:<10}  {icon} {f.risk_level:<6}  {f.replacement}"
+            f"{f.algorithm:<10}  {icon:<8}  {f.replacement}"
         )
-    print(f"{'─' * 90}")
-    print(f"Total findings: {len(findings)}")
+    lines.append("-" * 90)
+    lines.append(f"Total findings: {len(findings)}")
 
     by_risk: dict[str, int] = {}
     for f in findings:
         by_risk[f.risk_level] = by_risk.get(f.risk_level, 0) + 1
     for level, count in sorted(by_risk.items(), key=lambda x: order.get(x[0], 9)):
-        icon = risk_icon.get(level, "⚪")
-        print(f"  {icon} {level}: {count}")
+        icon = risk_icon.get(level, "[UNK ]")
+        lines.append(f"  {icon} {level}: {count}")
+    lines.append("")
+
+    output = "\n".join(lines)
+    sys.stdout.buffer.write((output + "\n").encode("utf-8", errors="replace"))
+    sys.stdout.buffer.flush()
 
 
 def main() -> None:  # named entry-point for setup.py / pyproject.toml

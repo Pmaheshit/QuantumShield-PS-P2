@@ -1,9 +1,9 @@
 # QuantumShield — PS-P2 Benchmark Evaluation Report
 
-**Timestamp:** `2026-10-12T18:54:04Z`  
-**Target Directory:** `C:\Users\ASUS\Desktop\QuantumShield-PS-P2\tests\fixtures`  
-**Runs per Mode:** 3 iterations  
-**Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.7)  
+**Timestamp:** `2026-10-12T19:19:42Z`<br>
+**Target Directory:** `C:\Users\ASUS\Desktop\QuantumShield-PS-P2\tests\fixtures`<br>
+**Runs per Mode:** 10 iterations<br>
+**Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.7)
 
 ## 1. Platform Configurations & Benchmark Architecture Status
 
@@ -29,10 +29,10 @@
 
 | Resource Metric | Regex Baseline | AST-Enriched | Platform D |
 | :--- | :---: | :---: | :---: |
-| **Mean Scan Runtime** | 22.53 ms | 28.50 ms | 26.38 ms |
-| **Runtime Std Dev** | 3.35 ms | 4.70 ms | 1.73 ms |
-| **Min / Max Runtime** | 20.04 / 26.34 ms | 23.07 / 31.26 ms | 24.39 / 27.53 ms |
-| **Peak Memory Allocation** | 182.82 KB | 194.66 KB | 193.06 KB |
+| **Mean Scan Runtime** | 18.79 ms | 31.95 ms | 20.54 ms |
+| **Runtime Std Dev** | 2.50 ms | 15.01 ms | 1.06 ms |
+| **Min / Max Runtime** | 17.18 / 25.47 ms | 19.06 / 71.16 ms | 19.37 / 22.59 ms |
+| **Peak Memory Allocation** | 185.93 KB | 200.48 KB | 197.30 KB |
 
 ## 4. Benchmark Limitations
 

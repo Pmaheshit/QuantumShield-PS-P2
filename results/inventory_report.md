@@ -1,9 +1,9 @@
 # QuantumShield — Cryptographic Inventory & Migration Report
 
-**Generated:** `2026-10-12T18:54:03.694865+00:00`  
-**Target Directory:** `C:\Users\ASUS\Desktop\QuantumShield-PS-P2\tests\fixtures`  
-**Files Scanned:** 7  
-**Total Cryptographic Findings:** 47  
+**Generated:** `2026-10-12T19:19:41.778514+00:00`<br>
+**Target Directory:** `C:\Users\ASUS\Desktop\QuantumShield-PS-P2\tests\fixtures`<br>
+**Files Scanned:** 7<br>
+**Total Cryptographic Findings:** 47
 
 ## 1. Executive Summary
 
