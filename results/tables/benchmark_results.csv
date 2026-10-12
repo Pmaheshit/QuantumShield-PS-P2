@@ -1,0 +1,4 @@
+mode,runs,mean_time_ms,min_time_ms,max_time_ms,stdev_time_ms,peak_memory_kb,total_detected,true_positives,false_positives,false_negatives,precision,recall,f1_score
+regex_only,3,22.532,20.04,26.338,3.348,182.82,68,13,55,5,0.1912,0.7222,0.3023
+ast_enriched,3,28.498,23.067,31.262,4.704,194.66,47,17,30,1,0.3617,0.9444,0.5231
+platform_d,3,26.381,24.391,27.534,1.73,193.06,47,17,30,1,0.3617,0.9444,0.5231

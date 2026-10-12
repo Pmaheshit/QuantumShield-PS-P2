@@ -1,0 +1,20 @@
+{
+  "platform_id": "platform_d",
+  "name": "Platform D (Custom Innovation: Memory-Budgeted High-Risk AST Scanner)",
+  "category": "custom_innovation",
+  "description": "Stream-oriented, single-worker pipeline with 64 MB memory ceiling and priority AST inspection on asymmetric Shor-vulnerable primitives (RSA, ECC) providing maximal PQC migration coverage with minimum resource footprint.",
+  "max_workers": 1,
+  "memory_limit_mb": 64,
+  "stream_chunk_size": 65536,
+  "scan_strategy": "high_risk_priority",
+  "parameters": {
+    "streaming_io": true,
+    "asymmetric_priority_ast": true,
+    "target_algorithms": [
+      "RSA",
+      "ECDSA",
+      "ECDH",
+      "ECC"
+    ]
+  }
+}

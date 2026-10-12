@@ -1,0 +1,11 @@
+{
+  "platform_id": "platform_a",
+  "name": "Platform A (Resource-Rich Workstation / Cloud VM)",
+  "category": "baseline",
+  "description": "Standard x86-64 host machine, full memory availability, multi-thread capability.",
+  "max_workers": 4,
+  "memory_limit_mb": null,
+  "stream_chunk_size": 65536,
+  "scan_strategy": "full",
+  "parameters": {}
+}

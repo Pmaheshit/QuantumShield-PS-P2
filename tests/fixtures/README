@@ -1,0 +1,12 @@
+# tests/fixtures/  — mock source files for scanner unit tests
+#
+# Each file contains representative cryptographic API usage patterns
+# for one or more algorithms, as would appear in a real codebase.
+#
+# File inventory:
+#   snippet_rsa.py     – Python: RSA (HIGH risk)
+#   snippet_ecc.py     – Python: ECDSA / ECDH (HIGH risk)
+#   snippet_aes.py     – Python: AES-128 (MODERATE), AES-256 + SHA-256 (LOWER)
+#   snippet_ecdsa.java – Java:   RSA, ECDSA, ECDH, AES-128/256, SHA-256
+#   snippet_aes.c      – C:      RSA, ECDSA, AES-128/256, SHA-256 (OpenSSL)
+#   snippet_clean.py   – Python: no crypto (true-negative fixture)

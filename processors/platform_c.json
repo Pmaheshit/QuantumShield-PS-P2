@@ -1,0 +1,11 @@
+{
+  "platform_id": "platform_c",
+  "name": "Platform C (Embedded / IoT Target)",
+  "category": "embedded",
+  "description": "Constrained microcontroller emulator (ARM Cortex-M / Raspberry Pi Zero, Phase 2).",
+  "max_workers": 1,
+  "memory_limit_mb": 32,
+  "stream_chunk_size": 65536,
+  "scan_strategy": "regex_fast",
+  "parameters": {}
+}

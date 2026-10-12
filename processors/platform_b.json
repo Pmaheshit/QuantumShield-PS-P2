@@ -1,0 +1,11 @@
+{
+  "platform_id": "platform_b",
+  "name": "Platform B (Constrained Server / CI Runner)",
+  "category": "constrained_server",
+  "description": "Single-core CPU execution, capped resources representative of deployed CI pipelines.",
+  "max_workers": 1,
+  "memory_limit_mb": 512,
+  "stream_chunk_size": 65536,
+  "scan_strategy": "full",
+  "parameters": {}
+}
