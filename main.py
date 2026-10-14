@@ -86,7 +86,7 @@ def run_full_pipeline(
     # Step 4: Reproducible Multi-Platform Benchmark
     print(f"[4/4] Executing comparative benchmark ({runs} runs per platform mode)...")
     harness = BenchmarkHarness(target_dir=scan_path, runs=runs, platform_name="Platform A (Local Workstation/Cloud Host)")
-    bench_results = harness.run_benchmark(include_platform_d=True)
+    bench_results = harness.run_benchmark(include_platform_d=True, include_platform_b=True)
 
     bench_json_path = tables_dir / "benchmark_results.json"
     bench_csv_path = tables_dir / "benchmark_results.csv"
@@ -104,18 +104,36 @@ def run_full_pipeline(
     try:
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots(figsize=(8, 4.5))
-        modes = ["Regex (Layer 1)", "AST (Layer 2)", "Platform D (Innovation)"]
-        keys = ["regex_only", "ast_enriched", "platform_d"]
-        times = [bench_results["results"][k]["mean_time_ms"] for k in keys]
-        colors = ["#4A90E2", "#50E3C2", "#B8E986"]
+        available_modes = []
+        available_keys = []
+        available_colors = []
 
-        bars = ax.bar(modes, times, color=colors, width=0.5)
+        mode_specs = [
+            ("Regex (Layer 1)",   "regex_only",  "#4A90E2"),
+            ("AST (Layer 2)",     "ast_enriched", "#50E3C2"),
+            ("Platform B",        "platform_b",   "#F5A623"),
+            ("Platform D",        "platform_d",   "#B8E986"),
+        ]
+        for label, key, color in mode_specs:
+            if key in bench_results["results"]:
+                available_modes.append(label)
+                available_keys.append(key)
+                available_colors.append(color)
+
+        times = [bench_results["results"][k]["mean_time_ms"] for k in available_keys]
+
+        fig, ax = plt.subplots(figsize=(9, 4.5))
+        bars = ax.bar(available_modes, times, color=available_colors, width=0.5)
         ax.set_ylabel("Mean Execution Time (ms)")
         ax.set_title("QuantumShield PS-P2: Scanner Runtime by Target Platform Mode")
         for bar in bars:
             yval = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2.0, yval + 0.3, f"{yval:.2f} ms", ha="center", va="bottom", fontsize=10)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                yval + 0.3,
+                f"{yval:.2f} ms",
+                ha="center", va="bottom", fontsize=10,
+            )
 
         plt.tight_layout()
         plot_path = figures_dir / "runtime_comparison.png"

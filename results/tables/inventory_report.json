@@ -2,7 +2,7 @@
   "metadata": {
     "tool": "QuantumShield PS-P2 Cryptographic Inventory & Migration Planner",
     "version": "1.0.0",
-    "timestamp_utc": "2026-10-12T19:19:41.778514+00:00",
+    "timestamp_utc": "2026-10-14T10:58:41.791515+00:00",
     "scanned_root": "C:\\Users\\ASUS\\Desktop\\QuantumShield-PS-P2\\tests\\fixtures",
     "total_files_scanned": 7,
     "total_findings": 47

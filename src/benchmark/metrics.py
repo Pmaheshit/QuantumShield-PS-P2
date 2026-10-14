@@ -73,9 +73,36 @@ def evaluate_accuracy(
     matched_detected_indices: set[int] = set()
 
     # Match detected findings to ground truth
+    # Pass 1: Exact relative path match (prevents cross-directory collision when duplicate basenames exist)
     for d_idx, d in enumerate(detected_findings):
         d_file = getattr(d, "file_path", "")
-        # Normalize file path to basename for comparison
+        d_norm_path = d_file.replace("\\", "/")
+        d_line = getattr(d, "line_number", -999)
+        d_algo = getattr(d, "algorithm", "").upper()
+
+        for e_idx, e in enumerate(expected_findings):
+            if e_idx in matched_expected_indices:
+                continue
+
+            e_norm_path = e.file_name.replace("\\", "/")
+            e_algo = e.algorithm.upper()
+
+            algo_match = (d_algo == e_algo) or (
+                d_algo in ("ECDSA", "ECC", "ECDH") and e_algo in ("ECDSA", "ECC", "ECDH")
+            )
+            line_match = abs(d_line - e.line_number) <= match_line_tolerance
+
+            if d_norm_path == e_norm_path and algo_match and line_match:
+                matched_expected_indices.add(e_idx)
+                matched_detected_indices.add(d_idx)
+                break
+
+    # Pass 2: Fallback to basename match for any remaining unmatched findings
+    for d_idx, d in enumerate(detected_findings):
+        if d_idx in matched_detected_indices:
+            continue
+
+        d_file = getattr(d, "file_path", "")
         d_file_name = d_file.replace("\\", "/").split("/")[-1]
         d_line = getattr(d, "line_number", -999)
         d_algo = getattr(d, "algorithm", "").upper()

@@ -65,13 +65,12 @@ Organizations cannot migrate cryptography they have not discovered. Quantum comp
 In accordance with the Post-Quantum Cryptography Track rules ([`Problem_Statment_Details.pdf`](docs/Problem_Statment_Details.pdf), Page 14):
 
 - **Platform A (Resource-Rich Baseline)**: Standard x86-64 workstation / Cloud VM, full memory availability.
-- **Platform B (Constrained Server)**: Single-core execution, 512 MB capped memory (`processors/platform_b.json`), representative of deployed CI runner backend services.
+- **Platform B (Constrained Server)**: Single-core execution (`max_workers=1`), 512 MB declared memory limit (`processors/platform_b.json`). **Measured on the host machine** with the Platform B configuration — no OS-level CPU pinning or memory cgroup is applied; the declared budget is not OS-enforced.
 - **Platform C (Embedded/IoT Target)**: Microcontroller emulator (ARM Cortex-M / Raspberry Pi Zero, Phase 2 continuation).
-- **Custom Platform D (Innovation)**: **Memory-Budgeted High-Risk AST Scanner**
-  - **Memory Ceiling Enforcement**: Enforces a strict 64 MB budget (`processors/platform_d.json`). The enforcement operates at the application level via defensive input file-size boundaries (`size <= 64 MB`) and streaming per-file iterator processing, ensuring peak Python heap allocations remain bounded (measured < 210 KB heap on the benchmark fixtures via `tracemalloc`).
-  - **Memory Accounting Distinction**: *Python-tracked heap allocation* (measured via `tracemalloc.get_traced_memory()`, ~200 KB) accounts for objects allocated within Python during the scan; *total process memory / RSS* (reported via `psutil`, ~30–50 MB) includes the Python interpreter runtime, shared libraries, and loaded modules.
+- **Custom Platform D (Innovation)**: **Selective High-Risk AST Scanner**
+  - **Input-Size Boundary (not an OS memory ceiling)**: Files exceeding 64 MB are rejected before parsing (`processors/platform_d.json`). This is a *per-file input-size limit*, not a process-wide heap ceiling. Total Python process RSS will always exceed 64 MB due to the interpreter and shared libraries. Python heap allocations during scanning are measured at < 210 KB via `tracemalloc` on benchmark fixtures.
+  - **Selective Strategy (`high_risk_priority`)**: Quick regex pre-scan checks each Python file for asymmetric (HIGH-risk) keywords. Files containing RSA/ECC patterns receive full AST parsing (eliminating comment/string FPs); symmetric-only files use fast regex instead. This is the actual implemented trade-off between parsing precision and CPU overhead.
   - **Pipeline & Concurrency**: Single-worker streaming iterator (`max_workers=1`).
-  - **Demonstrated Trade-Off**: Prioritizes deep AST inspection on high-risk Shor-vulnerable asymmetric primitives (RSA, ECC), while processing symmetric baselines with fast regex. Achieves **36.17% precision** and **94.44% recall** with low, stable runtime variance ($\sigma = 1.52\text{ ms}$ vs $3.07\text{ ms}$ for unconstrained AST).
 
 All target platform configurations are exported in standard JSON format under [`processors/`](processors/):
 `processors/platform_a.json`, `processors/platform_b.json`, `processors/platform_c.json`, `processors/platform_d.json`.
@@ -93,9 +92,9 @@ cd QuantumShield-PS-P2
 # 2. (Optional) Create virtual environment
 python -m venv .venv
 # Windows (PowerShell):
-.\.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 # Windows (Command Prompt):
-.\.venv\Scripts\activate.bat
+.venv\Scripts\activate.bat
 # Linux/macOS:
 source .venv/bin/activate
 
@@ -139,37 +138,47 @@ Run the comprehensive unit, regression, and integration test suite:
 python -m pytest tests/ -v
 ```
 
-### Test Suite Structure (113 Passing Tests)
+### Test Suite Structure (130 Passing Tests)
 - `tests/test_regex_scanner.py`: 48 tests (Pattern detection across Python, Java, C, boundary conditions, empty dirs, invalid encodings).
 - `tests/test_risk_classifier.py`: 24 tests (PS-P2 taxonomy classification, aliases, purpose-aware recommendations).
+- `tests/test_platform_d.py`: 23 tests (Platform D profile validation, input-size limit guard, Platform B benchmark, high_risk_priority selective strategy, ground-truth subset/unrelated-dir/duplicate-basename filtering).
 - `tests/test_ast_scanner.py`: 14 tests (Comment/string FP elimination, key-size extraction, ECC curves, syntax error handling).
-- `tests/test_benchmark.py`: 10 tests (Precision, recall, F1, zero-division guards, duplicate handling, environment capture).
-- `tests/test_platform_d.py`: 9 tests (Platform D profile validation, memory ceiling guard, benchmark integration).
+- `tests/test_benchmark.py`: 13 tests (Precision, recall, F1, zero-division guards, duplicate handling, environment capture, Platform B result, subset scan, unrelated dir, and multi-subdir duplicate filename regression tests).
 - `tests/test_inventory_report.py`: 5 tests (JSON/Markdown report schemas, secret and API-key redaction).
 - `tests/test_unified_scanner.py`: 2 tests (Cross-language scanning and comparative differential analysis).
-- `tests/test_end_to_end.py`: 1 test (End-to-end integration across scanner, classifier, reporting, and benchmarking).
+- `tests/test_end_to_end.py`: 1 test (End-to-end integration across scanner, classifier, reporting, and benchmarking including Platform B and D).
+
 
 ---
 
 ## 7. Actual Benchmark Results & Measurements
 
-> **Transparency Note**: The hackathon organizers' official sample repository and evaluation ground truth are **withheld until judging** (Problem Statement, Page 15). The figures below represent **actual measured values** evaluated on our multi-language labeled benchmark fixtures ([`tests/fixtures/`](tests/fixtures/)). No values are simulated or fabricated.
+> **Transparency Note**: The hackathon organizers' official sample repository and evaluation ground truth are **withheld until judging** (Problem Statement, Page 15). The figures below represent **actual measured values** generated by `python main.py --scan-dir tests/fixtures --runs 10 --output-dir results` on this machine. No values are simulated or fabricated.
 
 ### Accuracy & Detection Metrics
 | Mode / Target Platform | Total Detected | True Positives (TP) | False Positives (FP) | False Negatives (FN) | Precision | Recall | F1 Score |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Regex Baseline (Layer 1)** | 68 | 13 | 55 | 5 | **19.12%** | **72.22%** | **30.23%** |
 | **AST-Enriched (Layer 2)** | 47 | 17 | 30 | 1 | **36.17%** | **94.44%** | **52.31%** |
-| **Platform D (Custom Innovation)** | 47 | 17 | 30 | 1 | **36.17%** | **94.44%** | **52.31%** |
+| **Platform B (Constrained Server)** | 47 | 17 | 30 | 1 | **36.17%** | **94.44%** | **52.31%** |
+| **Platform D (Selective High-Risk AST)** | 60 | 18 | 42 | 0 | **30.00%** | **100.00%** | **46.15%** |
+
+> **Platform B note**: measured on the **host machine** under `max_workers=1, memory_limit_mb=512` configuration; no OS-level CPU or memory virtualisation is applied.
+> **Platform D note**: `high_risk_priority` strategy — AST parse for files with asymmetric (HIGH-risk) keywords, fast regex for symmetric-only files. Achieves 100% recall (18/18) because the quick pre-scan correctly routes all asymmetric and mixed files through AST. Higher FP count vs pure-AST because symmetric-only files use regex (no comment suppression).
+
 
 ### Performance & Resource Usage (10 Iterations)
-| Target Platform Mode | Mean Runtime | Runtime StdDev ($\sigma$) | Min / Max Runtime | Peak Memory Allocation |
+| Target Platform Mode | Mean Runtime | Runtime StdDev | Min / Max Runtime | Peak Memory (tracemalloc) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Platform A (Regex Baseline)** | 24.75 ms | 5.21 ms | 18.75 / 33.72 ms | 186.22 KB |
-| **Platform A (AST-Enriched)** | 24.71 ms | 5.40 ms | 20.14 / 35.70 ms | 209.07 KB |
-| **Platform D (Memory-Budgeted AST)** | 26.57 ms | 3.63 ms | 23.19 / 33.86 ms | 200.08 KB |
+| **Platform A — Regex Baseline** | 30.88 ms | 3.10 ms | 26.87 / 37.14 ms | 186.39 KB |
+| **Platform A — AST-Enriched** | 26.30 ms | 2.45 ms | 22.87 / 29.13 ms | 199.73 KB |
+| **Platform B — Constrained Server** | 27.22 ms | 2.26 ms | 23.62 / 30.02 ms | 197.89 KB |
+| **Platform D — Selective High-Risk AST** | 49.85 ms | 13.40 ms | 30.83 / 67.56 ms | 204.59 KB |
+
+> **Memory note**: `tracemalloc` measures Python-heap allocations only. Total process RSS (Python interpreter + shared libs) exceeds 64 MB regardless of the Platform D input-size boundary.
 
 *Exported artifacts: [`results/tables/benchmark_results.csv`](results/tables/benchmark_results.csv), [`results/tables/benchmark_results.json`](results/tables/benchmark_results.json), [`results/figures/runtime_comparison.png`](results/figures/runtime_comparison.png)*.
+
 
 ---
 
