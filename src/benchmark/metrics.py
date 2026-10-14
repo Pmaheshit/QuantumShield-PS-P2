@@ -16,6 +16,13 @@ Handles edge cases robustly:
   • Empty scanner findings
   • Duplicate findings on identical lines
   • Division by zero safeguards
+
+Algorithm matching:
+  • Default ("exact"): the detected algorithm must equal the expected algorithm.
+    ECDSA (signatures), ECDH (key agreement) and ECC (generic category) are
+    distinct and are NOT interchangeable.
+  • Optional ("family"): algorithms are compared by family. Use this only as a
+    secondary, clearly-labelled metric, never as the primary benchmark score.
 """
 
 from __future__ import annotations
@@ -24,6 +31,15 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Sequence, Set, Tuple
 
 from .ground_truth import ExpectedFinding
+
+# Family-level grouping, used only when match_mode="family".
+ALGORITHM_FAMILIES: dict[str, str] = {
+    "ECDSA": "ELLIPTIC_CURVE",
+    "ECDH": "ELLIPTIC_CURVE",
+    "ECC": "ELLIPTIC_CURVE",
+}
+
+MATCH_MODES = ("exact", "family")
 
 
 @dataclass
@@ -41,10 +57,31 @@ class AccuracyMetrics:
         return asdict(self)
 
 
+def _algorithms_match(detected: str, expected: str, match_mode: str = "exact") -> bool:
+    """
+    Decide whether a detected algorithm matches the expected one.
+
+    exact  : identical algorithm names (case-insensitive). Default.
+    family : identical names, or both belong to the same algorithm family.
+    """
+    d = (detected or "").upper()
+    e = (expected or "").upper()
+
+    if d == e:
+        return True
+
+    if match_mode == "family":
+        d_family = ALGORITHM_FAMILIES.get(d)
+        return d_family is not None and d_family == ALGORITHM_FAMILIES.get(e)
+
+    return False
+
+
 def evaluate_accuracy(
     detected_findings: Sequence[Any],
     expected_findings: Sequence[ExpectedFinding],
     match_line_tolerance: int = 1,
+    match_mode: str = "exact",
 ) -> AccuracyMetrics:
     """
     Compare detected scanner findings against ground-truth expected findings.
@@ -52,8 +89,15 @@ def evaluate_accuracy(
     A detected finding matches an expected finding if:
       - The file name matches
       - The line number matches (within match_line_tolerance, default 1 line)
-      - The algorithm matches (or maps to identical canonical category)
+      - The algorithm matches per `match_mode`:
+          "exact"  (default): identical algorithm names
+          "family": identical names or same algorithm family
     """
+    if match_mode not in MATCH_MODES:
+        raise ValueError(
+            f"Invalid match_mode {match_mode!r}; expected one of {MATCH_MODES}"
+        )
+
     total_expected = len(expected_findings)
     total_detected = len(detected_findings)
 
@@ -78,18 +122,15 @@ def evaluate_accuracy(
         d_file = getattr(d, "file_path", "")
         d_norm_path = d_file.replace("\\", "/")
         d_line = getattr(d, "line_number", -999)
-        d_algo = getattr(d, "algorithm", "").upper()
+        d_algo = getattr(d, "algorithm", "")
 
         for e_idx, e in enumerate(expected_findings):
             if e_idx in matched_expected_indices:
                 continue
 
             e_norm_path = e.file_name.replace("\\", "/")
-            e_algo = e.algorithm.upper()
 
-            algo_match = (d_algo == e_algo) or (
-                d_algo in ("ECDSA", "ECC", "ECDH") and e_algo in ("ECDSA", "ECC", "ECDH")
-            )
+            algo_match = _algorithms_match(d_algo, e.algorithm, match_mode)
             line_match = abs(d_line - e.line_number) <= match_line_tolerance
 
             if d_norm_path == e_norm_path and algo_match and line_match:
@@ -105,19 +146,16 @@ def evaluate_accuracy(
         d_file = getattr(d, "file_path", "")
         d_file_name = d_file.replace("\\", "/").split("/")[-1]
         d_line = getattr(d, "line_number", -999)
-        d_algo = getattr(d, "algorithm", "").upper()
+        d_algo = getattr(d, "algorithm", "")
 
         for e_idx, e in enumerate(expected_findings):
             if e_idx in matched_expected_indices:
                 continue
 
             e_file_name = e.file_name.replace("\\", "/").split("/")[-1]
-            e_algo = e.algorithm.upper()
 
             file_match = (d_file_name == e_file_name) or (d_file_name == ".")
-            algo_match = (d_algo == e_algo) or (
-                d_algo in ("ECDSA", "ECC", "ECDH") and e_algo in ("ECDSA", "ECC", "ECDH")
-            )
+            algo_match = _algorithms_match(d_algo, e.algorithm, match_mode)
             line_match = abs(d_line - e.line_number) <= match_line_tolerance
 
             if file_match and algo_match and line_match:

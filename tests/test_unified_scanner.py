@@ -53,3 +53,47 @@ class TestUnifiedScanner:
         assert 1024 in key_sizes
         assert 4096 in key_sizes
         assert None in key_sizes  # dynamic_size
+
+    def test_ast_mode_uses_regex_for_unrecognized_rsa_api(self, tmp_path):
+        source = (
+            "from some_crypto_library import create_rsa_key\n"
+            "private_key = create_rsa_key(2048)\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        regex_findings = scanner.regex_scanner._scan_file(tmp_path / "example.py", "python")
+        findings = scanner.scan()
+
+        assert any(f.algorithm == "RSA" and f.line_number == 2 for f in regex_findings)
+        assert [
+            (f.algorithm, f.line_number, f.detection_method)
+            for f in findings
+        ] == [("RSA", 2, "regex")]
+
+    def test_ast_mode_filters_regex_comment_and_string_matches(self, tmp_path):
+        source = (
+            "# create_rsa_key(1024)\n"
+            "example = 'create_rsa_key(1024)'\n"
+            "private_key = create_rsa_key(2048)\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+
+        assert [(f.algorithm, f.line_number) for f in findings] == [("RSA", 3)]
+
+    def test_ast_mode_deduplicates_supported_api(self, tmp_path):
+        source = (
+            "from cryptography.hazmat.primitives.asymmetric import rsa\n"
+            "private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+        call_findings = [f for f in findings if f.line_number == 2]
+
+        assert len(call_findings) == 1
+        assert call_findings[0].detection_method == "ast"

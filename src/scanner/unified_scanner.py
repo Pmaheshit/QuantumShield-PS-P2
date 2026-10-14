@@ -15,14 +15,15 @@ Workflow:
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
+import io
+import re
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+import tokenize
+from typing import Any, Iterator, Optional
 
 from .ast_scanner import AstFinding, PythonAstScanner
 from .regex_scanner import Finding, RegexScanner, _SKIP_DIRS
-from .risk_classifier import RiskClassifier, RiskLevel
+from .risk_classifier import RiskClassifier
 
 
 class UnifiedScanner:
@@ -55,16 +56,20 @@ class UnifiedScanner:
         scanned_files = list(self._iter_source_files())
 
         for file_path, language in scanned_files:
-            rel_path = str(file_path.relative_to(self.root)) if self.root.is_dir() else file_path.name
-
             if language == "python" and self.use_ast_for_python:
                 # Use AST scanner
                 ast_findings = self.ast_scanner.scan_file(file_path, relative_to=self.root)
-                # If AST encountered a syntax error or produced 0 findings on an unparseable file,
-                # we retain the AST findings (which records the error or findings).
-                # In addition, if code has standard calls not yet mapped in AST, regex can supplement.
-                # However, AST eliminates comment false positives!
                 findings.extend(ast_findings)
+
+                regex_findings = self.regex_scanner._scan_file(file_path, language)
+                code_lines = self._python_code_lines(file_path)
+                if code_lines is not None:
+                    for regex_finding in regex_findings:
+                        if not self._matches_python_code(regex_finding, code_lines):
+                            continue
+                        if self._represented_by_ast(regex_finding, ast_findings):
+                            continue
+                        findings.append(regex_finding)
             else:
                 # Regex scanner for Java, C, and non-AST Python
                 regex_findings = self.regex_scanner._scan_file(file_path, language)
@@ -95,3 +100,45 @@ class UnifiedScanner:
 
     def _iter_source_files(self) -> Iterator[tuple[Path, str]]:
         return self.regex_scanner._iter_source_files()
+
+    @staticmethod
+    def _python_code_lines(file_path: Path) -> Optional[list[str]]:
+        """Return source with comments and string literals masked, or None if tokenizing fails."""
+        try:
+            source = file_path.read_text(encoding="utf-8", errors="replace")
+            lines = source.splitlines(keepends=True)
+            for token in tokenize.generate_tokens(io.StringIO(source).readline):
+                if token.type not in (tokenize.COMMENT, tokenize.STRING):
+                    continue
+                start_line, start_column = token.start
+                end_line, end_column = token.end
+                for line_number in range(start_line, end_line + 1):
+                    line = list(lines[line_number - 1])
+                    start = start_column if line_number == start_line else 0
+                    end = end_column if line_number == end_line else len(line.rstrip("\r\n"))
+                    for column in range(start, min(end, len(line))):
+                        if line[column] not in "\r\n":
+                            line[column] = " "
+                    lines[line_number - 1] = "".join(line)
+            return [line.rstrip("\r\n") for line in lines]
+        except (OSError, IndentationError, SyntaxError, tokenize.TokenError):
+            return None
+
+    @staticmethod
+    def _matches_python_code(finding: Finding, code_lines: list[str]) -> bool:
+        if not 1 <= finding.line_number <= len(code_lines):
+            return False
+        return finding.matched_api in code_lines[finding.line_number - 1]
+
+    @staticmethod
+    def _represented_by_ast(finding: Finding, ast_findings: list[AstFinding]) -> bool:
+        api = re.sub(r"[\s(]+$", "", finding.matched_api).casefold()
+        return any(
+            ast_finding.line_number == finding.line_number
+            and ast_finding.algorithm == finding.algorithm
+            and (
+                api in ast_finding.matched_api.casefold()
+                or ast_finding.matched_api.casefold() in api
+            )
+            for ast_finding in ast_findings
+        )

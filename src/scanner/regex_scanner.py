@@ -67,6 +67,7 @@ _PYTHON_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(rsa\.generate_private_key)", re.IGNORECASE), "RSA"),
     (re.compile(r"(asymmetric\s*import\s+rsa\b)", re.IGNORECASE), "RSA"),
     (re.compile(r"(from\s+cryptography\.[^\n]*\brsa\b)", re.IGNORECASE), "RSA"),
+    (re.compile(r"\b(create_rsa_key)\s*\(", re.IGNORECASE), "RSA"),
     # PyCryptodome / PyCrypto
     (re.compile(r"(from\s+Crypto\.PublicKey\s+import\s+RSA)", re.IGNORECASE), "RSA"),
     (re.compile(r"(Crypto\.PublicKey\.RSA)", re.IGNORECASE), "RSA"),
