@@ -40,10 +40,16 @@ from typing import Any, Dict, List, Optional, Sequence
 import psutil
 
 from ..scanner.ast_scanner import PythonAstScanner
-from ..scanner.regex_scanner import Finding, RegexScanner
+from ..scanner.regex_scanner import Finding
 from ..scanner.unified_scanner import UnifiedScanner
 from .ground_truth import ExpectedFinding, get_all_ground_truth
-from .metrics import AccuracyMetrics, ScanCoverage, evaluate_accuracy
+from .metrics import (
+    AccuracyMetrics,
+    ScanCoverage,
+    ScanCoverageError,
+    evaluate_accuracy,
+)
+from ..scanner.scan_result import FileScanOutcome, ScanResult
 
 
 @dataclass
@@ -87,10 +93,14 @@ class BenchmarkRunResult:
     peak_memory_kb: float
     accuracy: AccuracyMetrics
     findings_count: int
+    scan_coverage: ScanCoverage | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["accuracy"] = self.accuracy.to_dict()
+        d["scan_coverage"] = (
+            self.scan_coverage.to_dict() if self.scan_coverage is not None else None
+        )
         return d
 
 
@@ -135,31 +145,29 @@ def _filter_ground_truth_for_dir(
     return expected
 
 
-def _scan_coverage(
-    regex_scanner: RegexScanner,
-    findings: Sequence[Finding],
-) -> ScanCoverage:
-    """Build verified coverage from discovered source files and scanner errors."""
-    discovered_files = list(regex_scanner._iter_source_files())
-    failed_file_markers = {
-        "<unreadable>",
-        "<ReadError>",
-        "<SyntaxError>",
-        "<InputSizeLimitExceeded>",
-    }
-    failed_paths = {
-        finding.file_path
-        for finding in findings
-        if finding.matched_api in failed_file_markers
-        or finding.detection_method == "ast_error"
-    }
-    files_discovered = len(discovered_files)
-    files_failed = len(failed_paths)
+def _scan_coverage(result: ScanResult) -> ScanCoverage:
+    """Build coverage exclusively from each scanner's explicit file outcomes."""
+    outcomes = tuple(result.outcomes)
+    paths = [outcome.file_path for outcome in outcomes]
+    if len(paths) != len(set(paths)):
+        raise ScanCoverageError("Benchmark invalid: duplicate file outcomes were reported.")
+    if len(result.discovered_files) != len(set(result.discovered_files)):
+        raise ScanCoverageError("Benchmark invalid: duplicate discovered files were reported.")
+    if set(paths) != set(result.discovered_files):
+        raise ScanCoverageError(
+            "Benchmark invalid: per-file outcomes do not cover exactly the discovered files."
+        )
 
+    counts = {
+        status: sum(outcome.status == status for outcome in outcomes)
+        for status in ("scanned", "failed", "skipped")
+    }
     return ScanCoverage(
-        files_discovered=files_discovered,
-        files_scanned=files_discovered - files_failed,
-        files_failed=files_failed,
+        files_discovered=len(result.discovered_files),
+        files_scanned=counts["scanned"],
+        files_failed=counts["failed"],
+        files_skipped=counts["skipped"],
+        outcomes=outcomes,
     )
 
 
@@ -282,9 +290,11 @@ class BenchmarkHarness:
         tracemalloc.reset_peak()
 
         findings: list[Finding] = []
+        scan_result: ScanResult | None = None
         for _ in range(self.runs):
             t0 = time.perf_counter()
-            findings = scanner.scan()
+            scan_result = scanner.scan_with_outcomes()
+            findings = scan_result.findings
             t1 = time.perf_counter()
             times_ms.append(round((t1 - t0) * 1000.0, 3))
 
@@ -293,10 +303,12 @@ class BenchmarkHarness:
         peak_kb = round(peak_mem / 1024.0, 2)
 
         expected = _filter_ground_truth_for_dir(self.ground_truth, self.target_dir)
+        assert scan_result is not None
+        coverage = _scan_coverage(scan_result)
         acc = evaluate_accuracy(
             findings,
             expected,
-            coverage=_scan_coverage(scanner.regex_scanner, findings),
+            coverage=coverage,
         )
 
         mean_t = round(statistics.mean(times_ms), 3)
@@ -315,6 +327,7 @@ class BenchmarkHarness:
             peak_memory_kb=peak_kb,
             accuracy=acc,
             findings_count=len(findings),
+            scan_coverage=coverage,
         )
 
     # ── Platform D ────────────────────────────────────────────────────────────
@@ -332,9 +345,11 @@ class BenchmarkHarness:
         tracemalloc.reset_peak()
 
         findings: list[Finding] = []
+        scan_result: ScanResult | None = None
         for _ in range(self.runs):
             t0 = time.perf_counter()
-            findings = scanner.scan()
+            scan_result = scanner.scan_with_outcomes()
+            findings = scan_result.findings
             t1 = time.perf_counter()
             times_ms.append(round((t1 - t0) * 1000.0, 3))
 
@@ -343,10 +358,12 @@ class BenchmarkHarness:
         peak_kb = round(peak_mem / 1024.0, 2)
 
         expected = _filter_ground_truth_for_dir(self.ground_truth, self.target_dir)
+        assert scan_result is not None
+        coverage = _scan_coverage(scan_result)
         acc = evaluate_accuracy(
             findings,
             expected,
-            coverage=_scan_coverage(scanner.regex_scanner, findings),
+            coverage=coverage,
         )
 
         mean_t = round(statistics.mean(times_ms), 3)
@@ -365,6 +382,7 @@ class BenchmarkHarness:
             peak_memory_kb=peak_kb,
             accuracy=acc,
             findings_count=len(findings),
+            scan_coverage=coverage,
         )
 
     # ── Platform A modes (regex / AST) ────────────────────────────────────────
@@ -382,9 +400,11 @@ class BenchmarkHarness:
         tracemalloc.reset_peak()
 
         findings: list[Finding] = []
+        scan_result: ScanResult | None = None
         for _ in range(self.runs):
             t0 = time.perf_counter()
-            findings = scanner.scan()
+            scan_result = scanner.scan_with_outcomes()
+            findings = scan_result.findings
             t1 = time.perf_counter()
             times_ms.append(round((t1 - t0) * 1000.0, 3))
 
@@ -396,10 +416,12 @@ class BenchmarkHarness:
         expected = _filter_ground_truth_for_dir(self.ground_truth, self.target_dir)
 
         # Evaluate accuracy
+        assert scan_result is not None
+        coverage = _scan_coverage(scan_result)
         acc = evaluate_accuracy(
             findings,
             expected,
-            coverage=_scan_coverage(scanner.regex_scanner, findings),
+            coverage=coverage,
         )
 
         mean_t = round(statistics.mean(times_ms), 3)
@@ -418,6 +440,7 @@ class BenchmarkHarness:
             peak_memory_kb=peak_kb,
             accuracy=acc,
             findings_count=len(findings),
+            scan_coverage=coverage,
         )
 
     # ── Comparison ────────────────────────────────────────────────────────────
@@ -485,6 +508,11 @@ class BenchmarkHarness:
             "max_time_ms",
             "stdev_time_ms",
             "peak_memory_kb",
+            "files_discovered",
+            "files_scanned",
+            "files_failed",
+            "files_skipped",
+            "coverage_status",
             "total_detected",
             "true_positives",
             "false_positives",
@@ -503,6 +531,7 @@ class BenchmarkHarness:
                     continue
                 row_data = benchmark_data["results"][mode_key]
                 acc = row_data["accuracy"]
+                coverage = row_data["scan_coverage"]
                 writer.writerow({
                     "mode": row_data["mode"],
                     "runs": row_data["runs"],
@@ -511,6 +540,11 @@ class BenchmarkHarness:
                     "max_time_ms": row_data["max_time_ms"],
                     "stdev_time_ms": row_data["stdev_time_ms"],
                     "peak_memory_kb": row_data["peak_memory_kb"],
+                    "files_discovered": coverage["files_discovered"],
+                    "files_scanned": coverage["files_scanned"],
+                    "files_failed": coverage["files_failed"],
+                    "files_skipped": coverage["files_skipped"],
+                    "coverage_status": acc["coverage_status"],
                     "total_detected": acc["total_detected"],
                     "true_positives": acc["true_positives"],
                     "false_positives": acc["false_positives"],
@@ -586,6 +620,11 @@ class BenchmarkHarness:
             return f"| {label} | " + " | ".join(str(v) for v in vals) + " |"
 
         lines.append(row("**Total Findings Detected**", [c["findings_count"] for c in cols]))
+        lines.append(row("**Files Discovered**", [c["scan_coverage"]["files_discovered"] for c in cols]))
+        lines.append(row("**Files Scanned**", [c["scan_coverage"]["files_scanned"] for c in cols]))
+        lines.append(row("**Files Failed**", [c["scan_coverage"]["files_failed"] for c in cols]))
+        lines.append(row("**Files Skipped**", [c["scan_coverage"]["files_skipped"] for c in cols]))
+        lines.append(row("**Coverage Status**", [c["accuracy"]["coverage_status"] for c in cols]))
         lines.append(row("**True Positives (TP)**", [c["accuracy"]["true_positives"] for c in cols]))
         lines.append(row("**False Positives (FP)**", [c["accuracy"]["false_positives"] for c in cols]))
         lines.append(row("**False Negatives (FN)**", [c["accuracy"]["false_negatives"] for c in cols]))

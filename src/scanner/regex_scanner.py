@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Iterator, List, Optional
 
 from .risk_classifier import RiskClassifier, RiskLevel
+from .scan_result import FileScanOutcome, ScanResult
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -286,10 +287,23 @@ class RegexScanner:
 
     def scan(self) -> list[Finding]:
         """Run the scan and return all findings."""
+        return self.scan_with_outcomes().findings
+
+    def scan_with_outcomes(self) -> ScanResult:
+        """Run the scan and report one processing outcome per discovered file."""
         findings: list[Finding] = []
-        for path, language in self._iter_source_files():
-            findings.extend(self._scan_file(path, language))
-        return findings
+        outcomes: list[FileScanOutcome] = []
+        discovered = list(self._iter_source_files())
+        for path, language in discovered:
+            file_findings, outcome = self._scan_file_with_outcome(path, language)
+            findings.extend(file_findings)
+            outcomes.append(outcome)
+        discovered_paths = tuple(self._relative(path) for path, _ in discovered)
+        return ScanResult(
+            findings=findings,
+            outcomes=outcomes,
+            discovered_files=discovered_paths,
+        )
 
     def scan_to_json(self) -> str:
         """Scan and return a JSON string of all findings."""
@@ -335,25 +349,35 @@ class RegexScanner:
 
     def _scan_file(self, path: Path, language: str) -> list[Finding]:
         """Scan a single file and return its findings."""
+        findings, _ = self._scan_file_with_outcome(path, language)
+        return findings
+
+    def _scan_file_with_outcome(
+        self, path: Path, language: str
+    ) -> tuple[list[Finding], FileScanOutcome]:
+        """Scan one file and return findings with its explicit processing result."""
+        relative_path = self._relative(path)
         try:
-            source = path.read_text(encoding="utf-8", errors="replace")
+            source = self._read_source(path)
         except OSError as exc:
             # Unreadable file: record a warning finding so the caller knows
-            rel = self._relative(path)
-            return [Finding(
-                file_path=rel,
-                line_number=0,
-                language=language,
-                matched_api="<unreadable>",
-                algorithm="UNKNOWN",
-                risk_level=RiskLevel.UNKNOWN,
-                replacement="N/A",
-                evidence=f"[ERROR] Could not read file: {exc}",
-                detection_method="regex",
-            )]
+            return (
+                [Finding(
+                    file_path=relative_path,
+                    line_number=0,
+                    language=language,
+                    matched_api="<unreadable>",
+                    algorithm="UNKNOWN",
+                    risk_level=RiskLevel.UNKNOWN,
+                    replacement="N/A",
+                    evidence=f"[ERROR] Could not read file: {exc}",
+                    detection_method="regex",
+                )],
+                FileScanOutcome(relative_path, "failed", str(exc)),
+            )
 
         if not source.strip():
-            return []  # empty file – nothing to report
+            return [], FileScanOutcome(relative_path, "scanned")
 
         _, patterns = _LANGUAGE_CONFIG[language]
         findings: list[Finding] = []
@@ -379,7 +403,7 @@ class RegexScanner:
 
                 risk = self._classifier.classify(algorithm)
                 findings.append(Finding(
-                    file_path=self._relative(path),
+                    file_path=relative_path,
                     line_number=line_no,
                     language=language,
                     matched_api=matched_api,
@@ -390,7 +414,11 @@ class RegexScanner:
                     detection_method="regex",
                 ))
 
-        return findings
+        return findings, FileScanOutcome(relative_path, "scanned")
+
+    @staticmethod
+    def _read_source(path: Path) -> str:
+        return path.read_text(encoding="utf-8", errors="replace")
 
     def _relative(self, path: Path) -> str:
         """Return path relative to root (or absolute if outside root)."""

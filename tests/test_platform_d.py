@@ -113,6 +113,7 @@ class TestPlatformDScannerExecution:
         # Create a large dummy file (1.5 MB)
         big_file = tmp_path / "giant_code.py"
         big_file.write_text("# padding\n" + "x = 1\n" * 200000, encoding="utf-8")
+        (tmp_path / "normal.py").write_text("x = 1\n", encoding="utf-8")
 
         scanner = PlatformDScanner(root=tmp_path, profile=strict_profile)
         findings = scanner.scan()
@@ -121,6 +122,63 @@ class TestPlatformDScannerExecution:
         assert findings[0].matched_api == "<InputSizeLimitExceeded>"
         assert findings[0].detection_method == "platform_d_guard"
         assert "exceeds" in findings[0].evidence
+
+        scan_result = scanner.scan_with_outcomes()
+        outcomes = {outcome.file_path: outcome for outcome in scan_result.outcomes}
+        assert len(outcomes) == 2
+        assert outcomes["giant_code.py"].status == "skipped"
+        assert outcomes["normal.py"].status == "scanned"
+        assert len(scan_result.outcomes) == 2
+        from src.benchmark.runner import _scan_coverage
+        from src.benchmark.metrics import evaluate_accuracy
+
+        coverage = _scan_coverage(scan_result)
+        metrics = evaluate_accuracy([], [], coverage=coverage)
+        assert coverage.files_discovered == (
+            coverage.files_scanned + coverage.files_failed + coverage.files_skipped
+        )
+        assert metrics.coverage_status == "partial"
+
+    def test_stat_oserror_is_recorded_as_failed_outcome(self, tmp_path, monkeypatch):
+        failed_file = tmp_path / "unavailable.py"
+        succeeded_file = tmp_path / "available.py"
+        failed_file.write_text("x = 1\n", encoding="utf-8")
+        succeeded_file.write_text("x = 2\n", encoding="utf-8")
+        scanner = PlatformDScanner(root=tmp_path)
+        monkeypatch.setattr(
+            scanner,
+            "_iter_source_files",
+            lambda: iter([(failed_file, "python"), (succeeded_file, "python")]),
+        )
+
+        def file_size(path: Path) -> int:
+            if path == failed_file:
+                raise OSError("deterministic stat failure")
+            return path.stat().st_size
+
+        monkeypatch.setattr(scanner, "_file_size_bytes", file_size)
+        scan_result = scanner.scan_with_outcomes()
+
+        outcomes = {outcome.file_path: outcome for outcome in scan_result.outcomes}
+        assert len(outcomes) == 2
+        assert outcomes["unavailable.py"].status == "failed"
+        assert "deterministic stat failure" in outcomes["unavailable.py"].reason
+        assert outcomes["available.py"].status == "scanned"
+
+    def test_unexpected_file_processing_exception_propagates(
+        self, tmp_path, monkeypatch
+    ):
+        source_file = tmp_path / "source.py"
+        source_file.write_text("x = 1\n", encoding="utf-8")
+        scanner = PlatformDScanner(root=tmp_path)
+
+        def fail_processing(file_path: Path):
+            raise RuntimeError("unexpected scanner defect")
+
+        monkeypatch.setattr(scanner, "_scan_python_file_with_outcome", fail_processing)
+
+        with pytest.raises(RuntimeError, match="unexpected scanner defect"):
+            scanner.scan_with_outcomes()
 
     def test_benchmark_harness_integration_with_platform_b_and_d(self, tmp_path):
         harness = BenchmarkHarness(target_dir=FIXTURES_DIR, runs=2)

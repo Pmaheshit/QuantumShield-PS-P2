@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .regex_scanner import Finding
 from .risk_classifier import RiskClassifier, RiskLevel
+from .scan_result import FileScanOutcome
 
 
 # Competition-rule switch: enable only if rules require conservative AES-128
@@ -96,12 +97,19 @@ class PythonAstScanner:
 
     def scan_file(self, path: str | Path, relative_to: Optional[str | Path] = None) -> list[AstFinding]:
         """Scan a Python file on disk."""
+        findings, _ = self.scan_file_with_outcome(path, relative_to=relative_to)
+        return findings
+
+    def scan_file_with_outcome(
+        self, path: str | Path, relative_to: Optional[str | Path] = None
+    ) -> tuple[list[AstFinding], FileScanOutcome]:
+        """Scan a Python file and return its processing outcome separately."""
         p = Path(path).resolve()
         rel_path = str(p.relative_to(Path(relative_to).resolve())) if relative_to else p.name
 
         try:
             code = p.read_text(encoding="utf-8", errors="replace")
-        except Exception as exc:
+        except OSError as exc:
             return [
                 AstFinding(
                     file_path=rel_path,
@@ -116,9 +124,13 @@ class PythonAstScanner:
                     confidence="UNKNOWN",
                     details=f"Read error: {exc}",
                 )
-            ]
+            ], FileScanOutcome(rel_path, "failed", str(exc))
 
-        return self.scan_source(code, file_path=rel_path)
+        findings = self.scan_source(code, file_path=rel_path)
+        syntax_errors = [finding for finding in findings if finding.detection_method == "ast_error"]
+        if syntax_errors:
+            return findings, FileScanOutcome(rel_path, "failed", syntax_errors[0].details)
+        return findings, FileScanOutcome(rel_path, "scanned")
 
 
 class _CryptoAstVisitor(ast.NodeVisitor):

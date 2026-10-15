@@ -24,6 +24,7 @@ from typing import Any, Iterator, Optional
 from .ast_scanner import AstFinding, PythonAstScanner
 from .regex_scanner import Finding, RegexScanner, _SKIP_DIRS
 from .risk_classifier import RiskClassifier
+from .scan_result import FileScanOutcome, ScanResult
 
 
 class UnifiedScanner:
@@ -52,17 +53,28 @@ class UnifiedScanner:
         Execute scan across all files in root.
         Returns unified list of findings.
         """
+        return self.scan_with_outcomes().findings
+
+    def scan_with_outcomes(self) -> ScanResult:
+        """Run the scan and return one explicit outcome per discovered file."""
         findings: list[Finding] = []
+        outcomes: list[FileScanOutcome] = []
         scanned_files = list(self._iter_source_files())
 
         for file_path, language in scanned_files:
+            relative_path = self.regex_scanner._relative(file_path)
             if language == "python" and self.use_ast_for_python:
-                # Use AST scanner
-                ast_findings = self.ast_scanner.scan_file(file_path, relative_to=self.root)
+                ast_findings, ast_outcome = self.ast_scanner.scan_file_with_outcome(
+                    file_path,
+                    relative_to=self.root,
+                )
                 findings.extend(ast_findings)
 
-                regex_findings = self.regex_scanner._scan_file(file_path, language)
-                code_lines = self._python_code_lines(file_path)
+                regex_findings, regex_outcome = self.regex_scanner._scan_file_with_outcome(
+                    file_path,
+                    language,
+                )
+                code_lines, code_error = self._python_code_lines_with_error(file_path)
                 if code_lines is not None:
                     for regex_finding in regex_findings:
                         if not self._matches_python_code(regex_finding, code_lines):
@@ -70,12 +82,38 @@ class UnifiedScanner:
                         if self._represented_by_ast(regex_finding, ast_findings):
                             continue
                         findings.append(regex_finding)
+                errors = [
+                    outcome.reason
+                    for outcome in (ast_outcome, regex_outcome)
+                    if outcome.status == "failed"
+                ]
+                if code_error:
+                    errors.append(code_error)
+                outcomes.append(
+                    FileScanOutcome(
+                        relative_path,
+                        "failed" if errors else "scanned",
+                        "; ".join(errors),
+                    )
+                )
             else:
                 # Regex scanner for Java, C, and non-AST Python
-                regex_findings = self.regex_scanner._scan_file(file_path, language)
+                regex_findings, outcome = self.regex_scanner._scan_file_with_outcome(
+                    file_path,
+                    language,
+                )
                 findings.extend(regex_findings)
+                outcomes.append(outcome)
 
-        return findings
+        discovered_paths = tuple(
+            self.regex_scanner._relative(file_path)
+            for file_path, _ in scanned_files
+        )
+        return ScanResult(
+            findings=findings,
+            outcomes=outcomes,
+            discovered_files=discovered_paths,
+        )
 
     def scan_comparison(self) -> dict[str, Any]:
         """
@@ -104,6 +142,14 @@ class UnifiedScanner:
     @staticmethod
     def _python_code_lines(file_path: Path) -> Optional[list[str]]:
         """Return source with comments and string literals masked, or None if tokenizing fails."""
+        lines, _ = UnifiedScanner._python_code_lines_with_error(file_path)
+        return lines
+
+    @staticmethod
+    def _python_code_lines_with_error(
+        file_path: Path,
+    ) -> tuple[Optional[list[str]], str]:
+        """Return masked source lines or the read/tokenization error."""
         try:
             source = file_path.read_text(encoding="utf-8", errors="replace")
             lines = source.splitlines(keepends=True)
@@ -121,9 +167,9 @@ class UnifiedScanner:
                         if line[column] not in "\r\n":
                             line[column] = " "
                     lines[line_number - 1] = "".join(line)
-            return [line.rstrip("\r\n") for line in lines]
-        except (OSError, IndentationError, SyntaxError, tokenize.TokenError):
-            return None
+            return [line.rstrip("\r\n") for line in lines], ""
+        except (OSError, IndentationError, SyntaxError, tokenize.TokenError) as exc:
+            return None, str(exc)
 
     @staticmethod
     def _matches_python_code(finding: Finding, code_lines: list[str]) -> bool:

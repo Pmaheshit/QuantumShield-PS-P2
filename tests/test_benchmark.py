@@ -25,6 +25,9 @@ from src.benchmark.metrics import (
 )
 from src.benchmark.runner import BenchmarkHarness, EnvironmentSpec
 from src.scanner.regex_scanner import Finding
+from src.scanner.regex_scanner import RegexScanner
+from src.scanner.scan_result import FileScanOutcome, ScanResult
+from src.benchmark.runner import _scan_coverage
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -123,6 +126,148 @@ class TestMetricCalculations:
         with pytest.raises(ScanCoverageError, match="no source files were discovered"):
             evaluate_accuracy([], [], coverage=ScanCoverage(files_discovered=0, files_scanned=0))
 
+    def test_scan_coverage_requires_one_explicit_outcome_per_discovered_file(self):
+        with pytest.raises(ScanCoverageError, match="outcomes do not match"):
+            evaluate_accuracy(
+                [],
+                [],
+                coverage=ScanCoverage(
+                    files_discovered=1,
+                    files_scanned=1,
+                ),
+            )
+
+    def test_duplicate_outcomes_are_rejected(self):
+        findings = [Finding("same.py", 1, "python", "RSA", "RSA", "HIGH", "rep", "ev")]
+        outcomes = [
+            FileScanOutcome("same.py", "scanned"),
+            FileScanOutcome("same.py", "scanned"),
+        ]
+        with pytest.raises(ScanCoverageError, match="duplicate"):
+            _scan_coverage(ScanResult(findings, outcomes, ("same.py",)))
+
+    def test_outcomes_must_match_discovered_file_paths(self):
+        scan_result = ScanResult(
+            findings=[],
+            outcomes=[FileScanOutcome("other.py", "scanned")],
+            discovered_files=("discovered.py",),
+        )
+
+        with pytest.raises(ScanCoverageError, match="exactly the discovered files"):
+            _scan_coverage(scan_result)
+
+    def test_same_basename_in_different_directories_does_not_match(self, tmp_path):
+        module_a = tmp_path / "module_a"
+        module_b = tmp_path / "module_b"
+        module_a.mkdir()
+        module_b.mkdir()
+        (module_a / "snippet_rsa.py").write_text(
+            "rsa.generate_private_key()\n",
+            encoding="utf-8",
+        )
+        (module_b / "snippet_rsa.py").write_text("pass\n", encoding="utf-8")
+
+        detected = [
+            Finding(
+                "module_a/snippet_rsa.py",
+                1,
+                "python",
+                "RSA",
+                "RSA",
+                "HIGH",
+                "rep",
+                "ev",
+            )
+        ]
+        expected = [
+            ExpectedFinding(
+                "module_b/snippet_rsa.py",
+                1,
+                "RSA",
+                "HIGH",
+                is_genuine_call=True,
+            )
+        ]
+        coverage = ScanCoverage(
+            files_discovered=2,
+            files_scanned=2,
+            outcomes=(
+                FileScanOutcome("module_a/snippet_rsa.py", "scanned"),
+                FileScanOutcome("module_b/snippet_rsa.py", "scanned"),
+            ),
+        )
+
+        metrics = evaluate_accuracy(detected, expected, coverage=coverage)
+
+        assert metrics.true_positives == 0
+        assert metrics.false_positives == 1
+        assert metrics.false_negatives == 1
+
+    def test_basename_fallback_requires_unique_covered_file(self):
+        detected = [
+            Finding(
+                "module_a/snippet_rsa.py",
+                1,
+                "python",
+                "RSA",
+                "RSA",
+                "HIGH",
+                "rep",
+                "ev",
+            )
+        ]
+        expected = [
+            ExpectedFinding("snippet_rsa.py", 1, "RSA", "HIGH", is_genuine_call=True)
+        ]
+        coverage = ScanCoverage(
+            files_discovered=1,
+            files_scanned=1,
+            outcomes=(FileScanOutcome("module_a/snippet_rsa.py", "scanned"),),
+        )
+
+        metrics = evaluate_accuracy(detected, expected, coverage=coverage)
+
+        assert metrics.true_positives == 1
+        assert metrics.false_positives == 0
+        assert metrics.false_negatives == 0
+
+    def test_dot_path_does_not_match_arbitrary_expected_filename(self):
+        detected = [
+            Finding(".", 1, "python", "RSA", "RSA", "HIGH", "rep", "ev")
+        ]
+        expected = [
+            ExpectedFinding("snippet_rsa.py", 1, "RSA", "HIGH", is_genuine_call=True)
+        ]
+        coverage = ScanCoverage(
+            files_discovered=1,
+            files_scanned=1,
+            outcomes=(FileScanOutcome("snippet_rsa.py", "scanned"),),
+        )
+
+        metrics = evaluate_accuracy(detected, expected, coverage=coverage)
+
+        assert metrics.true_positives == 0
+        assert metrics.false_positives == 1
+        assert metrics.false_negatives == 1
+
+    def test_multiple_findings_for_one_file_count_as_one_scanned_file(self):
+        findings = [
+            Finding("same.py", 1, "python", "RSA", "RSA", "HIGH", "rep", "ev1"),
+            Finding("same.py", 2, "python", "ECDSA", "ECDSA", "HIGH", "rep", "ev2"),
+        ]
+        coverage = _scan_coverage(
+            ScanResult(
+                findings,
+                [FileScanOutcome("same.py", "scanned")],
+                ("same.py",),
+            )
+        )
+
+        assert coverage.files_discovered == 1
+        assert coverage.files_scanned == 1
+        assert coverage.files_failed == 0
+        assert coverage.files_skipped == 0
+
     def test_empty_detected_with_expected(self):
         expected = [ExpectedFinding("file.py", 10, "RSA", "HIGH", True)]
         metrics = evaluate_accuracy([], expected)
@@ -191,6 +336,48 @@ class TestBenchmarkExecutionAndExports:
 
         assert regex_result["findings_count"] == 0
         assert regex_result["accuracy"]["false_positives"] == 0
+        assert regex_result["scan_coverage"]["files_discovered"] == 1
+        assert regex_result["scan_coverage"]["files_scanned"] == 1
+        assert regex_result["scan_coverage"]["files_failed"] == 0
+        assert regex_result["scan_coverage"]["files_skipped"] == 0
+
+    def test_read_failure_is_counted_without_consulting_findings(self, tmp_path, monkeypatch):
+        file_paths = [tmp_path / f"module_{index}.py" for index in range(3)]
+        for path in file_paths:
+            path.write_text("value = 1\n", encoding="utf-8")
+
+        scanner = RegexScanner(root=tmp_path)
+        original_read = scanner._read_source
+
+        def read_source(path: Path) -> str:
+            if path == file_paths[1]:
+                raise OSError("deterministic read failure")
+            return original_read(path)
+
+        monkeypatch.setattr(scanner, "_read_source", read_source)
+        scan_result = scanner.scan_with_outcomes()
+        coverage = _scan_coverage(
+            ScanResult(
+                findings=[],
+                outcomes=scan_result.outcomes,
+                discovered_files=scan_result.discovered_files,
+            )
+        )
+        metrics = evaluate_accuracy([], [], coverage=coverage)
+
+        assert coverage.files_discovered == 3
+        assert coverage.files_scanned == 2
+        assert coverage.files_failed == 1
+        assert coverage.files_skipped == 0
+        assert sum(
+            (coverage.files_scanned, coverage.files_failed, coverage.files_skipped)
+        ) == coverage.files_discovered
+        assert metrics.coverage_status == "partial"
+        failed = [outcome for outcome in coverage.outcomes if outcome.status == "failed"]
+        assert len(failed) == 1
+        assert failed[0].file_path == "module_1.py"
+        assert "deterministic read failure" in failed[0].reason
+
 
     def test_benchmark_runs_and_produces_valid_structure(self, tmp_path):
         harness = BenchmarkHarness(target_dir=FIXTURES_DIR, runs=2)
@@ -237,11 +424,14 @@ class TestBenchmarkExecutionAndExports:
         assert "regex_only" in csv_content
         assert "ast_enriched" in csv_content
         assert "platform_b" in csv_content
+        assert "files_discovered" in csv_content
+        assert "coverage_status" in csv_content
 
         # Validate Markdown content
         md_content = md_file.read_text(encoding="utf-8")
         assert "QuantumShield" in md_content
         assert "Accuracy Comparison" in md_content
+        assert "Files Scanned" in md_content
 
     def test_subset_scan_ground_truth_filtered_correctly(self, tmp_path):
         """Scanning only snippet_rsa.py should not produce FN from other fixture files."""
