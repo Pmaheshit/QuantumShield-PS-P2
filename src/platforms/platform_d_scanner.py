@@ -18,11 +18,12 @@ Implements the Custom Platform D architecture for QuantumShield PS-P2:
     - Symmetric-only files (AES, SHA with no asymmetric call sites) are
       processed via fast regex baseline.
     - This selective strategy is implemented by:
-        1. Running a quick regex pre-scan on the file's text.
+        1. Tokenizing a quick pre-scan so comments and ordinary strings do not
+           trigger asymmetric routing.
         2. If any HIGH-risk pattern is found, parse the full AST for precision.
-        3. Otherwise emit regex findings directly (no AST parse overhead).
-    - This yields ~95%+ PQC migration recall at lower parsing overhead compared
-      to indiscriminate full-AST traversal on every source file.
+        3. Otherwise emit token-aware regex findings directly.
+    - The benchmark reports precision, recall, and runtime for each scanner mode
+      rather than assuming that the selective path preserves a fixed recall.
 """
 
 from __future__ import annotations
@@ -33,7 +34,12 @@ from pathlib import Path
 from typing import Iterator, List, Optional
 
 from ..scanner.ast_scanner import AstFinding, PythonAstScanner
-from ..scanner.regex_scanner import Finding, RegexScanner, _SKIP_DIRS
+from ..scanner.regex_scanner import (
+    Finding,
+    RegexScanner,
+    _SKIP_DIRS,
+    _mask_python_comments_and_strings,
+)
 from ..scanner.risk_classifier import RiskClassifier, RiskLevel
 from .platform_config import PLATFORM_D, PlatformProfile
 
@@ -50,9 +56,10 @@ _HIGH_RISK_QUICK_PATTERNS: list[re.Pattern] = [
 
 
 def _file_text_contains_high_risk(text: str) -> bool:
-    """Return True if any HIGH-risk asymmetric pattern is found in raw text."""
+    """Return True if Python code contains a HIGH-risk asymmetric pattern."""
+    code = _mask_python_comments_and_strings(text)
     for pat in _HIGH_RISK_QUICK_PATTERNS:
-        if pat.search(text):
+        if pat.search(code):
             return True
     return False
 
@@ -152,11 +159,10 @@ class PlatformDScanner:
     def _scan_python_high_risk_priority(self, file_path: Path) -> list[Finding]:
         """
         Selective AST strategy:
-        1. Read raw source text.
+        1. Read source and mask comments and non-API strings.
         2. Quick-check for HIGH-risk (asymmetric) API keywords.
-        3. If found  → run full AST scan (precise, eliminates comment FPs).
-        4. If absent → run fast regex scan (only LOWER/MODERATE primitives
-           expected; no AST parse overhead on this file).
+        3. If found  → run full AST scan (precise, eliminates comment/string FPs).
+        4. If absent → run token-aware regex scan without AST parse overhead.
 
         The detection_method field distinguishes which path each finding took.
         """

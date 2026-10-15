@@ -42,6 +42,56 @@ ALGORITHM_FAMILIES: dict[str, str] = {
 MATCH_MODES = ("exact", "family")
 
 
+class ScanCoverageError(RuntimeError):
+    """Raised when a benchmark run is invalid because scan coverage is inadequate."""
+
+
+@dataclass(frozen=True)
+class ScanCoverage:
+    """
+    What the scanner actually did, tracked separately from what it found.
+
+    files_discovered : source files the benchmark expected to be scanned
+    files_scanned    : files read and processed successfully
+    files_failed     : files that could not be read or that raised an error
+    scanner_errors   : internal scanner exceptions (e.g. caught and swallowed)
+    """
+
+    files_discovered: int
+    files_scanned: int
+    files_failed: int = 0
+    scanner_errors: int = 0
+
+
+def validate_scan_coverage(coverage: ScanCoverage) -> None:
+    """
+    Raise ScanCoverageError unless the scan demonstrably processed every file.
+
+    Distinguishes:
+      - never processed any files          -> invalid
+      - failed to read / process some files -> invalid
+      - silently skipped some files         -> invalid
+      - scanned everything, found nothing   -> valid (legitimately clean)
+    """
+    if coverage.files_scanned <= 0:
+        raise ScanCoverageError("Benchmark invalid: no source files were scanned.")
+
+    if coverage.files_failed > 0 or coverage.scanner_errors > 0:
+        raise ScanCoverageError(
+            "Benchmark invalid: scan had errors "
+            f"({coverage.files_failed} file(s) failed, "
+            f"{coverage.scanner_errors} scanner error(s))."
+        )
+
+    accounted = coverage.files_scanned + coverage.files_failed
+    if accounted < coverage.files_discovered:
+        raise ScanCoverageError(
+            "Benchmark invalid: "
+            f"{coverage.files_discovered - accounted} discovered file(s) were "
+            "skipped without being scanned or reported as failed."
+        )
+
+
 @dataclass
 class AccuracyMetrics:
     total_expected: int
@@ -52,6 +102,9 @@ class AccuracyMetrics:
     precision: float
     recall: float
     f1_score: float
+    # "verified"   : scan coverage was supplied and validated
+    # "unverified" : no coverage info; an empty-vs-empty 1.0 is NOT evidence of success
+    coverage_status: str = "unverified"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -82,9 +135,15 @@ def evaluate_accuracy(
     expected_findings: Sequence[ExpectedFinding],
     match_line_tolerance: int = 1,
     match_mode: str = "exact",
+    coverage: ScanCoverage | None = None,
 ) -> AccuracyMetrics:
     """
     Compare detected scanner findings against ground-truth expected findings.
+
+    If `coverage` is given it is validated first and an inadequate scan raises
+    ScanCoverageError instead of producing scores. Without it, results are
+    marked coverage_status="unverified": an empty-vs-empty 1.0 then only means
+    "nothing to compare", not "the scanner worked".
 
     A detected finding matches an expected finding if:
       - The file name matches
@@ -97,6 +156,10 @@ def evaluate_accuracy(
         raise ValueError(
             f"Invalid match_mode {match_mode!r}; expected one of {MATCH_MODES}"
         )
+
+    if coverage is not None:
+        validate_scan_coverage(coverage)
+    coverage_status = "verified" if coverage is not None else "unverified"
 
     total_expected = len(expected_findings)
     total_detected = len(detected_findings)
@@ -111,6 +174,7 @@ def evaluate_accuracy(
             precision=1.0,
             recall=1.0,
             f1_score=1.0,
+            coverage_status=coverage_status,
         )
 
     matched_expected_indices: set[int] = set()
@@ -194,4 +258,5 @@ def evaluate_accuracy(
         precision=round(precision, 4),
         recall=round(recall, 4),
         f1_score=round(f1_score, 4),
+        coverage_status=coverage_status,
     )

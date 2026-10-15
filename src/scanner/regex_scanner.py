@@ -22,9 +22,12 @@ Each Finding carries the information required by the PS-P2 deliverable spec:
 
 from __future__ import annotations
 
+import ast
+import io
 import json
 import re
 import sys
+import tokenize
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterator, List, Optional
@@ -88,7 +91,7 @@ _PYTHON_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Key length 128 bits = 16 bytes
     (re.compile(r"(AES[_\-]128\b)", re.IGNORECASE), "AES-128"),
     (re.compile(r"get_random_bytes\s*\(\s*16\s*\)", re.IGNORECASE), "AES-128"),
-    (re.compile(r"AES\.new\s*\([^,]+,\s*AES\.[A-Z]+,\s*(?:key\s*=\s*)?(?:b['\"][^'\"]{16}['\"]|\w{1,20})\s*\)",
+    (re.compile(r"AES\.new\s*\([^,]+,\s*AES\.[A-Z_]+,\s*(?:key\s*=\s*)?(?:b['\"][^'\"]{16}['\"]|\w{1,20})\s*\)",
                 re.IGNORECASE), "AES-128"),
 
     # ── AES-256 ──────────────────────────────────────────────────────────────
@@ -178,6 +181,69 @@ _LANGUAGE_CONFIG: dict[str, tuple[frozenset[str], list[tuple[re.Pattern, str]]]]
     "java":   (frozenset({".java"}),        _JAVA_PATTERNS),
     "c":      (frozenset({".c", ".h", ".cpp", ".cc", ".cxx", ".hpp"}), _C_PATTERNS),
 }
+
+
+def _mask_python_comments_and_strings(source: str) -> str:
+    """Mask comments and non-API strings without changing source positions."""
+    lines = source.splitlines(keepends=True)
+    line_starts: list[int] = []
+    offset = 0
+    for line in lines:
+        line_starts.append(offset)
+        offset += len(line)
+
+    masked = list(source)
+
+    def position_offset(position: tuple[int, int]) -> int:
+        row, column = position
+        if row < 1 or row > len(line_starts):
+            return len(source)
+        return line_starts[row - 1] + column
+
+    def mask_range(start: int, end: int) -> None:
+        for index in range(start, min(end, len(masked))):
+            if masked[index] not in "\r\n":
+                masked[index] = " "
+
+    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+    while True:
+        try:
+            token = next(tokens)
+        except StopIteration:
+            break
+        except (IndentationError, tokenize.TokenError) as exc:
+            position = (
+                exc.args[1]
+                if isinstance(exc, tokenize.TokenError)
+                else (exc.lineno or 1, exc.offset or 0)
+            )
+            mask_range(position_offset(position), len(source))
+            break
+
+        if token.type == tokenize.COMMENT:
+            mask_range(position_offset(token.start), position_offset(token.end))
+        elif token.type == tokenize.STRING:
+            line_prefix = lines[token.start[0] - 1][:token.start[1]]
+            try:
+                literal = ast.literal_eval(token.string)
+            except (SyntaxError, ValueError):
+                literal = None
+
+            is_hashlib_algorithm = (
+                isinstance(literal, str)
+                and literal.lower() == "sha256"
+                and re.search(r"\bhashlib\.new\s*\(\s*$", line_prefix, re.IGNORECASE)
+            )
+            is_aes_key = (
+                isinstance(literal, bytes)
+                and len(literal) == 16
+                and re.search(r"\bAES\.new\s*\([^)]*$", line_prefix, re.IGNORECASE)
+            )
+            if not (is_hashlib_algorithm or is_aes_key):
+                mask_range(position_offset(token.start), position_offset(token.end))
+
+    return "".join(masked)
+
 
 # Directories to skip (venvs, package installs, build outputs)
 _SKIP_DIRS: frozenset[str] = frozenset({
@@ -293,7 +359,13 @@ class RegexScanner:
         findings: list[Finding] = []
         seen: set[tuple[int, str]] = set()  # deduplicate same line + algorithm
 
-        lines = source.splitlines()
+        scan_source = (
+            _mask_python_comments_and_strings(source)
+            if language == "python"
+            else source
+        )
+        lines = scan_source.splitlines()
+        evidence_lines = source.splitlines()
         for line_no, line in enumerate(lines, start=1):
             for pattern, algorithm in patterns:
                 m = pattern.search(line)
@@ -314,7 +386,7 @@ class RegexScanner:
                     algorithm=algorithm,
                     risk_level=risk.level,
                     replacement=risk.replacement,
-                    evidence=line.strip(),
+                    evidence=evidence_lines[line_no - 1].strip(),
                     detection_method="regex",
                 ))
 

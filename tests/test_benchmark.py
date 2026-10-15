@@ -120,6 +120,27 @@ class TestBenchmarkConfigurationAndErrors:
 
 
 class TestBenchmarkExecutionAndExports:
+    def test_regex_only_benchmark_ignores_python_comments_and_strings(self, tmp_path):
+        (tmp_path / "documentation.py").write_text(
+            "# AES-128 was used in an older implementation.\n"
+            'message = "SHA256 is mentioned in this documentation."\n',
+            encoding="utf-8",
+        )
+        harness = BenchmarkHarness(
+            target_dir=tmp_path,
+            ground_truth={},
+            runs=1,
+        )
+
+        results = harness.run_benchmark(
+            include_platform_b=False,
+            include_platform_d=False,
+        )
+        regex_result = results["results"]["regex_only"]
+
+        assert regex_result["findings_count"] == 0
+        assert regex_result["accuracy"]["false_positives"] == 0
+
     def test_benchmark_runs_and_produces_valid_structure(self, tmp_path):
         harness = BenchmarkHarness(target_dir=FIXTURES_DIR, runs=2)
         results = harness.run_benchmark(include_platform_b=True)

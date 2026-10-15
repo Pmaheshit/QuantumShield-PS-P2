@@ -162,6 +162,24 @@ class TestPythonPositive:
         sha = [f for f in findings if f.algorithm == "SHA-256"]
         assert all(f.risk_level == RiskLevel.LOWER for f in sha)
 
+    def test_python_comments_and_documentation_strings_are_ignored(self, tmp_path):
+        source = (
+            "# AES-128 was used in an older implementation.\n"
+            'message = "SHA256 is mentioned in this documentation."\n'
+            'digest = hashlib.new("sha256")\n'
+            'cipher = AES.new(key, AES.MODE_GCM, b"0123456789abcdef")\n'
+        )
+        file_path = tmp_path / "mentions.py"
+        file_path.write_text(source, encoding="utf-8")
+
+        findings = RegexScanner(root=file_path).scan()
+
+        assert [(finding.algorithm, finding.line_number) for finding in findings] == [
+            ("SHA-256", 3),
+            ("AES-128", 4),
+        ]
+        assert findings[0].evidence == 'digest = hashlib.new("sha256")'
+
     def test_rsa_line_number_is_accurate(self):
         """The line reporting a rsa.generate_private_key call should match."""
         source_lines = RSA_PY.read_text().splitlines()

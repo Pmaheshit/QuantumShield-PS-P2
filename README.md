@@ -44,6 +44,10 @@ Organizations cannot migrate cryptography they have not discovered. Quantum comp
                                                      • Platform D: Custom Innovation
 ```
 
+In unified Python scanning, regex findings supplement AST results for APIs the AST
+does not yet recognize. The fallback masks comments and string literals and avoids
+re-reporting APIs already represented by an AST finding.
+
 ---
 
 ## 2. PS-P2 Risk Taxonomy & Migration Rules
@@ -69,7 +73,7 @@ In accordance with the Post-Quantum Cryptography Track rules ([`Problem_Statment
 - **Platform C (Embedded/IoT Target)**: Microcontroller emulator (ARM Cortex-M / Raspberry Pi Zero, Phase 2 continuation).
 - **Custom Platform D (Innovation)**: **Selective High-Risk AST Scanner**
   - **Input-Size Boundary (not an OS memory ceiling)**: Files exceeding 64 MB are rejected before parsing (`processors/platform_d.json`). This is a *per-file input-size limit*, not a process-wide heap ceiling. Total Python process RSS will always exceed 64 MB due to the interpreter and shared libraries. Python heap allocations during scanning are measured at < 210 KB via `tracemalloc` on benchmark fixtures.
-  - **Selective Strategy (`high_risk_priority`)**: Quick regex pre-scan checks each Python file for asymmetric (HIGH-risk) keywords. Files containing RSA/ECC patterns receive full AST parsing (eliminating comment/string FPs); symmetric-only files use fast regex instead. This is the actual implemented trade-off between parsing precision and CPU overhead.
+  - **Selective Strategy (`high_risk_priority`)**: A tokenizer-aware pre-scan ignores Python comments and non-API strings when routing asymmetric files to AST; symmetric-only files use tokenizer-aware regex scanning. The benchmark reports precision and recall for regex-only, AST-enriched, and Platform D strategies alongside runtime.
   - **Pipeline & Concurrency**: Single-worker streaming iterator (`max_workers=1`).
 
 All target platform configurations are exported in standard JSON format under [`processors/`](processors/):
@@ -164,7 +168,7 @@ python -m pytest tests/ -v
 | **Platform D (Selective High-Risk AST)** | 60 | 18 | 42 | 0 | **30.00%** | **100.00%** | **46.15%** |
 
 > **Platform B note**: measured on the **host machine** under `max_workers=1, memory_limit_mb=512` configuration; no OS-level CPU or memory virtualisation is applied.
-> **Platform D note**: `high_risk_priority` strategy — AST parse for files with asymmetric (HIGH-risk) keywords, fast regex for symmetric-only files. Achieves 100% recall (18/18) because the quick pre-scan correctly routes all asymmetric and mixed files through AST. Higher FP count vs pure-AST because symmetric-only files use regex (no comment suppression).
+> **Platform D note**: `high_risk_priority` strategy — AST parse for files with asymmetric (HIGH-risk) code, tokenizer-aware regex for symmetric-only files. The checked-in metrics predate the tokenizer-aware regex change; rerun the benchmark to compare updated precision, recall, and runtime across strategies.
 
 
 ### Performance & Resource Usage (10 Iterations)

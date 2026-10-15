@@ -113,9 +113,10 @@ class UnifiedScanner:
                 start_line, start_column = token.start
                 end_line, end_column = token.end
                 for line_number in range(start_line, end_line + 1):
-                    line = list(lines[line_number - 1])
+                    line_text = lines[line_number - 1]
+                    line = list(line_text)
                     start = start_column if line_number == start_line else 0
-                    end = end_column if line_number == end_line else len(line.rstrip("\r\n"))
+                    end = end_column if line_number == end_line else len(line_text.rstrip("\r\n"))
                     for column in range(start, min(end, len(line))):
                         if line[column] not in "\r\n":
                             line[column] = " "

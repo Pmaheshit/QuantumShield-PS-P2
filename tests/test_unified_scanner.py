@@ -28,14 +28,12 @@ class TestUnifiedScanner:
         assert "java" in languages
         assert "c" in languages
 
-    def test_ast_vs_regex_comparison_on_edge_cases(self):
+    def test_regex_ignores_comments_and_strings_on_edge_cases(self):
         edge_fixture = FIXTURES_DIR / "snippet_edge_cases.py"
         scanner = UnifiedScanner(root=edge_fixture, use_ast_for_python=True)
 
         # In snippet_edge_cases.py:
-        # - Regex matches the comment lines ("RSA-2048", "AES-128", "hashlib.sha256")
-        #   AND the string literal ("RSA_key_holder", "AES_128")
-        #   AND the import line.
+        # - Regex ignores comments and the logging string and detects the import.
         # - AST ONLY matches the 3 genuine function calls:
         #   CustomRSAKeyModule.generate(1024)
         #   CustomRSAKeyModule.generate(4096)
@@ -43,10 +41,9 @@ class TestUnifiedScanner:
         regex_findings = scanner.regex_scanner._scan_file(edge_fixture, "python")
         ast_findings = scanner.ast_scanner.scan_file(edge_fixture)
 
-        # AST must have eliminated the comment and string literal false positives!
         assert len(ast_findings) == 3
-        # Regex flags comments and strings, so regex findings count > AST findings count
-        assert len(regex_findings) > len(ast_findings)
+        assert len(regex_findings) == 1
+        assert "import RSA" in regex_findings[0].evidence
 
         # Check AST key sizes
         key_sizes = [f.key_size for f in ast_findings]

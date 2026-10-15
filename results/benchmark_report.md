@@ -5,6 +5,8 @@
 **Runs per Mode:** 10 iterations<br>
 **Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.7)
 
+> **Historical snapshot:** These measurements predate tokenizer-aware Python regex filtering. Rerun the benchmark to obtain current precision, recall, and runtime results.
+
 ## 1. Platform Configurations & Benchmark Architecture Status
 
 - **Platform A (Resource-Rich Host):** Evaluated locally on host machine (regex baseline and AST-enriched).

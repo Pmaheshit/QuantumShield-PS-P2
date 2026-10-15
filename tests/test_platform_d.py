@@ -188,6 +188,13 @@ class TestHighRiskPriorityStrategy:
         )
         assert not _file_text_contains_high_risk(symmetric_only)
 
+    def test_quick_pattern_ignores_comments_and_strings(self):
+        text = (
+            "# RSA.generate(2048) was used in an older implementation.\n"
+            'message = "ECDSA is mentioned in this documentation."\n'
+        )
+        assert not _file_text_contains_high_risk(text)
+
     def test_asymmetric_file_gets_ast_findings(self, tmp_path):
         """Python file with RSA keyword must receive AST scan (detection_method='ast')."""
         rsa_file = tmp_path / "has_rsa.py"
@@ -237,6 +244,18 @@ class TestHighRiskPriorityStrategy:
         aes_findings = [f for f in findings if "AES" in f.algorithm]
         assert len(aes_findings) >= 1
         assert all(f.detection_method == "regex" for f in aes_findings)
+
+    def test_symmetric_fast_path_ignores_crypto_mentions_in_comments_and_strings(
+        self, tmp_path
+    ):
+        source = (
+            "# AES-128 was used in an older implementation.\n"
+            'message = "SHA256 is mentioned in this documentation."\n'
+        )
+        (tmp_path / "documentation.py").write_text(source, encoding="utf-8")
+        scanner = PlatformDScanner(root=tmp_path)
+
+        assert scanner.scan() == []
 
 
 class TestGroundTruthFiltering:
