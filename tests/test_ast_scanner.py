@@ -131,6 +131,73 @@ cipher = AES.new(b"0123456789abcdef0123456789abcdef", AES.MODE_GCM)
         assert findings[0].key_size == 256
         assert findings[0].confidence == "CONFIRMED"
 
+    @pytest.mark.parametrize(
+        ("key", "expected_algorithm", "expected_size"),
+        [
+            ('b"0123456789abcdef"', "AES-128", 128),
+            ('b"0123456789abcdef01234567"', "AES-192", 192),
+            ('b"0123456789abcdef0123456789abcdef"', "AES-256", 256),
+        ],
+    )
+    def test_aes_key_size_variants_are_reported_exactly(
+        self, ast_scanner: PythonAstScanner, key: str, expected_algorithm: str,
+        expected_size: int,
+    ):
+        findings = ast_scanner.scan_source(
+            f"from Crypto.Cipher import AES\ncipher = AES.new({key}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == expected_algorithm
+        assert findings[0].key_size == expected_size
+        assert findings[0].confidence == "CONFIRMED"
+        assert findings[0].assumed_default is False
+
+    def test_unknown_aes_key_is_not_assigned_a_variant_by_default(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from Crypto.Cipher import AES\ncipher = AES.new(key_from_kms, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].confidence == "INFERRED"
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+        assert findings[0].assumed_default is False
+        assert findings[0].to_dict()["assumed_default"] is False
+
+    def test_conservative_aes_default_is_explicitly_marked(
+        self, ast_scanner: PythonAstScanner, monkeypatch
+    ):
+        import src.scanner.ast_scanner as ast_scanner_module
+
+        monkeypatch.setattr(ast_scanner_module, "CONSERVATIVE_AES_DEFAULT", True)
+        findings = ast_scanner.scan_source(
+            "from Crypto.Cipher import AES\ncipher = AES.new(key_from_kms, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-128"
+        assert findings[0].confidence == "INFERRED"
+        assert findings[0].assumed_default is True
+        assert findings[0].to_dict()["assumed_default"] is True
+
+    def test_cryptography_unknown_aes_key_is_unresolved(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from cryptography.hazmat.primitives.ciphers import algorithms\n"
+            "cipher = algorithms.AES(key_from_kms)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].confidence == "INFERRED"
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+
 
 class TestAstAliasingAndImports:
     def test_aliased_import_resolved(self, ast_scanner: PythonAstScanner):

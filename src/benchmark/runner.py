@@ -43,7 +43,7 @@ from ..scanner.ast_scanner import PythonAstScanner
 from ..scanner.regex_scanner import Finding, RegexScanner
 from ..scanner.unified_scanner import UnifiedScanner
 from .ground_truth import ExpectedFinding, get_all_ground_truth
-from .metrics import AccuracyMetrics, evaluate_accuracy
+from .metrics import AccuracyMetrics, ScanCoverage, evaluate_accuracy
 
 
 @dataclass
@@ -133,6 +133,34 @@ def _filter_ground_truth_for_dir(
                     )
                 )
     return expected
+
+
+def _scan_coverage(
+    regex_scanner: RegexScanner,
+    findings: Sequence[Finding],
+) -> ScanCoverage:
+    """Build verified coverage from discovered source files and scanner errors."""
+    discovered_files = list(regex_scanner._iter_source_files())
+    failed_file_markers = {
+        "<unreadable>",
+        "<ReadError>",
+        "<SyntaxError>",
+        "<InputSizeLimitExceeded>",
+    }
+    failed_paths = {
+        finding.file_path
+        for finding in findings
+        if finding.matched_api in failed_file_markers
+        or finding.detection_method == "ast_error"
+    }
+    files_discovered = len(discovered_files)
+    files_failed = len(failed_paths)
+
+    return ScanCoverage(
+        files_discovered=files_discovered,
+        files_scanned=files_discovered - files_failed,
+        files_failed=files_failed,
+    )
 
 
 class BenchmarkHarness:
@@ -265,7 +293,11 @@ class BenchmarkHarness:
         peak_kb = round(peak_mem / 1024.0, 2)
 
         expected = _filter_ground_truth_for_dir(self.ground_truth, self.target_dir)
-        acc = evaluate_accuracy(findings, expected)
+        acc = evaluate_accuracy(
+            findings,
+            expected,
+            coverage=_scan_coverage(scanner.regex_scanner, findings),
+        )
 
         mean_t = round(statistics.mean(times_ms), 3)
         min_t = min(times_ms)
@@ -311,7 +343,11 @@ class BenchmarkHarness:
         peak_kb = round(peak_mem / 1024.0, 2)
 
         expected = _filter_ground_truth_for_dir(self.ground_truth, self.target_dir)
-        acc = evaluate_accuracy(findings, expected)
+        acc = evaluate_accuracy(
+            findings,
+            expected,
+            coverage=_scan_coverage(scanner.regex_scanner, findings),
+        )
 
         mean_t = round(statistics.mean(times_ms), 3)
         min_t = min(times_ms)
@@ -360,7 +396,11 @@ class BenchmarkHarness:
         expected = _filter_ground_truth_for_dir(self.ground_truth, self.target_dir)
 
         # Evaluate accuracy
-        acc = evaluate_accuracy(findings, expected)
+        acc = evaluate_accuracy(
+            findings,
+            expected,
+            coverage=_scan_coverage(scanner.regex_scanner, findings),
+        )
 
         mean_t = round(statistics.mean(times_ms), 3)
         min_t = min(times_ms)

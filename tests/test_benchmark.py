@@ -17,7 +17,12 @@ from pathlib import Path
 import pytest
 
 from src.benchmark.ground_truth import ExpectedFinding
-from src.benchmark.metrics import AccuracyMetrics, evaluate_accuracy
+from src.benchmark.metrics import (
+    AccuracyMetrics,
+    ScanCoverage,
+    ScanCoverageError,
+    evaluate_accuracy,
+)
 from src.benchmark.runner import BenchmarkHarness, EnvironmentSpec
 from src.scanner.regex_scanner import Finding
 
@@ -81,6 +86,42 @@ class TestMetricCalculations:
         assert metrics.precision == 1.0
         assert metrics.recall == 1.0
         assert metrics.f1_score == 1.0
+        assert metrics.coverage_status == "unverified"
+
+    @pytest.mark.parametrize(
+        ("detected_algorithm", "expected_algorithm"),
+        [
+            ("ECDSA", "ECDH"),
+            ("ECDH", "ECC"),
+            ("ECC", "ECDSA"),
+        ],
+    )
+    def test_distinct_ecc_algorithms_do_not_match(
+        self, detected_algorithm: str, expected_algorithm: str
+    ):
+        detected = [
+            Finding(
+                "file.py", 10, "python", "operation", detected_algorithm,
+                "HIGH", "rep", "ev",
+            )
+        ]
+        expected = [
+            ExpectedFinding("file.py", 10, expected_algorithm, "HIGH", True)
+        ]
+
+        metrics = evaluate_accuracy(detected, expected)
+
+        assert metrics.true_positives == 0
+        assert metrics.false_positives == 1
+        assert metrics.false_negatives == 1
+
+    def test_family_match_mode_is_not_available_for_primary_metrics(self):
+        with pytest.raises(ValueError, match="expected one of"):
+            evaluate_accuracy([], [], match_mode="family")
+
+    def test_empty_scan_coverage_is_rejected(self):
+        with pytest.raises(ScanCoverageError, match="no source files were discovered"):
+            evaluate_accuracy([], [], coverage=ScanCoverage(files_discovered=0, files_scanned=0))
 
     def test_empty_detected_with_expected(self):
         expected = [ExpectedFinding("file.py", 10, "RSA", "HIGH", True)]
@@ -120,6 +161,16 @@ class TestBenchmarkConfigurationAndErrors:
 
 
 class TestBenchmarkExecutionAndExports:
+    def test_benchmark_rejects_empty_source_directory(self, tmp_path):
+        harness = BenchmarkHarness(
+            target_dir=tmp_path,
+            ground_truth={},
+            runs=1,
+        )
+
+        with pytest.raises(ScanCoverageError, match="no source files were discovered"):
+            harness.run_benchmark(include_platform_b=False, include_platform_d=False)
+
     def test_regex_only_benchmark_ignores_python_comments_and_strings(self, tmp_path):
         (tmp_path / "documentation.py").write_text(
             "# AES-128 was used in an older implementation.\n"
@@ -225,6 +276,7 @@ class TestBenchmarkExecutionAndExports:
         assert ast_acc["precision"] == 1.0
         assert ast_acc["recall"] == 1.0
         assert ast_acc["f1_score"] == 1.0
+        assert ast_acc["coverage_status"] == "verified"
 
     def test_duplicate_filenames_across_subdirectories_evaluated(self, tmp_path):
         """Duplicate fixture filenames in subdirectories each receive expected findings."""

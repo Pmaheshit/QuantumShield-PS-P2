@@ -18,28 +18,19 @@ Handles edge cases robustly:
   • Division by zero safeguards
 
 Algorithm matching:
-  • Default ("exact"): the detected algorithm must equal the expected algorithm.
+  • Exact only: the detected algorithm must equal the expected algorithm.
     ECDSA (signatures), ECDH (key agreement) and ECC (generic category) are
     distinct and are NOT interchangeable.
-  • Optional ("family"): algorithms are compared by family. Use this only as a
-    secondary, clearly-labelled metric, never as the primary benchmark score.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Sequence, Set, Tuple
+from typing import Any, Sequence
 
 from .ground_truth import ExpectedFinding
 
-# Family-level grouping, used only when match_mode="family".
-ALGORITHM_FAMILIES: dict[str, str] = {
-    "ECDSA": "ELLIPTIC_CURVE",
-    "ECDH": "ELLIPTIC_CURVE",
-    "ECC": "ELLIPTIC_CURVE",
-}
-
-MATCH_MODES = ("exact", "family")
+MATCH_MODES = ("exact",)
 
 
 class ScanCoverageError(RuntimeError):
@@ -73,8 +64,8 @@ def validate_scan_coverage(coverage: ScanCoverage) -> None:
       - silently skipped some files         -> invalid
       - scanned everything, found nothing   -> valid (legitimately clean)
     """
-    if coverage.files_scanned <= 0:
-        raise ScanCoverageError("Benchmark invalid: no source files were scanned.")
+    if coverage.files_discovered <= 0:
+        raise ScanCoverageError("Benchmark invalid: no source files were discovered.")
 
     if coverage.files_failed > 0 or coverage.scanner_errors > 0:
         raise ScanCoverageError(
@@ -83,12 +74,15 @@ def validate_scan_coverage(coverage: ScanCoverage) -> None:
             f"{coverage.scanner_errors} scanner error(s))."
         )
 
+    if coverage.files_scanned <= 0:
+        raise ScanCoverageError("Benchmark invalid: no source files were scanned.")
+
     accounted = coverage.files_scanned + coverage.files_failed
-    if accounted < coverage.files_discovered:
+    if accounted != coverage.files_discovered:
         raise ScanCoverageError(
-            "Benchmark invalid: "
-            f"{coverage.files_discovered - accounted} discovered file(s) were "
-            "skipped without being scanned or reported as failed."
+            "Benchmark invalid: scan coverage accounting mismatch "
+            f"({coverage.files_discovered} discovered, {coverage.files_scanned} scanned, "
+            f"{coverage.files_failed} failed)."
         )
 
 
@@ -110,24 +104,11 @@ class AccuracyMetrics:
         return asdict(self)
 
 
-def _algorithms_match(detected: str, expected: str, match_mode: str = "exact") -> bool:
-    """
-    Decide whether a detected algorithm matches the expected one.
-
-    exact  : identical algorithm names (case-insensitive). Default.
-    family : identical names, or both belong to the same algorithm family.
-    """
+def _algorithms_match(detected: str, expected: str) -> bool:
+    """Return whether algorithm names match exactly, ignoring case."""
     d = (detected or "").upper()
     e = (expected or "").upper()
-
-    if d == e:
-        return True
-
-    if match_mode == "family":
-        d_family = ALGORITHM_FAMILIES.get(d)
-        return d_family is not None and d_family == ALGORITHM_FAMILIES.get(e)
-
-    return False
+    return d == e
 
 
 def evaluate_accuracy(
@@ -148,9 +129,7 @@ def evaluate_accuracy(
     A detected finding matches an expected finding if:
       - The file name matches
       - The line number matches (within match_line_tolerance, default 1 line)
-      - The algorithm matches per `match_mode`:
-          "exact"  (default): identical algorithm names
-          "family": identical names or same algorithm family
+      - The canonical algorithm names match exactly (case-insensitive)
     """
     if match_mode not in MATCH_MODES:
         raise ValueError(
@@ -194,7 +173,7 @@ def evaluate_accuracy(
 
             e_norm_path = e.file_name.replace("\\", "/")
 
-            algo_match = _algorithms_match(d_algo, e.algorithm, match_mode)
+            algo_match = _algorithms_match(d_algo, e.algorithm)
             line_match = abs(d_line - e.line_number) <= match_line_tolerance
 
             if d_norm_path == e_norm_path and algo_match and line_match:
@@ -219,7 +198,7 @@ def evaluate_accuracy(
             e_file_name = e.file_name.replace("\\", "/").split("/")[-1]
 
             file_match = (d_file_name == e_file_name) or (d_file_name == ".")
-            algo_match = _algorithms_match(d_algo, e.algorithm, match_mode)
+            algo_match = _algorithms_match(d_algo, e.algorithm)
             line_match = abs(d_line - e.line_number) <= match_line_tolerance
 
             if file_match and algo_match and line_match:

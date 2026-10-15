@@ -25,6 +25,11 @@ from .regex_scanner import Finding
 from .risk_classifier import RiskClassifier, RiskLevel
 
 
+# Competition-rule switch: enable only if rules require conservative AES-128
+# reporting when the key size cannot be determined.
+CONSERVATIVE_AES_DEFAULT = False
+
+
 @dataclass
 class AstFinding(Finding):
     """
@@ -36,6 +41,7 @@ class AstFinding(Finding):
     confidence: str = "CONFIRMED"  # "CONFIRMED" | "INFERRED" | "UNKNOWN"
     key_size: Optional[int] = None
     curve: Optional[str] = None
+    assumed_default: bool = False
     details: str = ""
 
     def to_dict(self) -> dict:
@@ -44,6 +50,7 @@ class AstFinding(Finding):
         d["confidence"] = self.confidence
         d["key_size"] = self.key_size
         d["curve"] = self.curve
+        d["assumed_default"] = self.assumed_default
         d["details"] = self.details
         return d
 
@@ -410,13 +417,15 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # PyCryptodome: AES.new(key, mode, ...)
         if (attr == "new" and ("AES" in base or base.endswith(".AES"))) or full_call.endswith("AES.new"):
             key_size, confidence = self._extract_aes_key_size_from_new(node)
-            if key_size == 256:
-                algo = "AES-256"
-            elif key_size == 128:
+            assumed_default = False
+            if key_size in (128, 192, 256):
+                algo = f"AES-{key_size}"
+            elif CONSERVATIVE_AES_DEFAULT:
                 algo = "AES-128"
+                confidence = "INFERRED"
+                assumed_default = True
             else:
-                # Conservative fallback if size cannot be statically deduced
-                algo = "AES-128"
+                algo = "AES-UNKNOWN"
                 confidence = "INFERRED"
 
             profile = self.classifier.get_profile(algo)
@@ -434,7 +443,17 @@ class _CryptoAstVisitor(ast.NodeVisitor):
                     confidence=confidence,
                     key_size=key_size,
                     parameters={"key_bits": key_size},
-                    details=f"AES cipher construction with key size {key_size if key_size else 'UNKNOWN (inferred 128-bit)'}",
+                    assumed_default=assumed_default,
+                    details=(
+                        f"AES cipher construction with {key_size}-bit key"
+                        if key_size is not None
+                        else (
+                            "AES cipher construction; reported as inferred AES-128 "
+                            "by conservative default"
+                            if assumed_default
+                            else "AES cipher construction with unknown key size"
+                        )
+                    ),
                 )
             )
             return
@@ -442,12 +461,15 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # cryptography: algorithms.AES(key)
         if attr == "AES" or full_call.endswith("algorithms.AES") or full_call == "AES":
             key_size, confidence = self._extract_aes_key_size_from_cryptography(node)
-            if key_size == 256:
-                algo = "AES-256"
-            elif key_size == 128:
+            assumed_default = False
+            if key_size in (128, 192, 256):
+                algo = f"AES-{key_size}"
+            elif CONSERVATIVE_AES_DEFAULT:
                 algo = "AES-128"
+                confidence = "INFERRED"
+                assumed_default = True
             else:
-                algo = "AES-128"
+                algo = "AES-UNKNOWN"
                 confidence = "INFERRED"
 
             profile = self.classifier.get_profile(algo)
@@ -465,7 +487,17 @@ class _CryptoAstVisitor(ast.NodeVisitor):
                     confidence=confidence,
                     key_size=key_size,
                     parameters={"key_bits": key_size},
-                    details=f"cryptography algorithms.AES cipher with key size {key_size if key_size else 'UNKNOWN (inferred 128-bit)'}",
+                    assumed_default=assumed_default,
+                    details=(
+                        f"cryptography algorithms.AES cipher with {key_size}-bit key"
+                        if key_size is not None
+                        else (
+                            "cryptography algorithms.AES cipher; reported as inferred "
+                            "AES-128 by conservative default"
+                            if assumed_default
+                            else "cryptography algorithms.AES cipher with unknown key size"
+                        )
+                    ),
                 )
             )
             return
