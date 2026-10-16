@@ -2,29 +2,30 @@
   "metadata": {
     "tool": "QuantumShield PS-P2 Cryptographic Inventory & Migration Planner",
     "version": "1.0.0",
-    "timestamp_utc": "2026-10-14T10:58:41.791515+00:00",
-    "scanned_root": "C:\\Users\\ASUS\\Desktop\\QuantumShield-PS-P2\\tests\\fixtures",
+    "timestamp_utc": "2026-10-16T05:10:31.932869+00:00",
+    "scanned_root": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\tests\\fixtures",
     "total_files_scanned": 7,
-    "total_findings": 47
+    "total_findings": 55
   },
   "summary": {
     "findings_by_risk": {
-      "HIGH": 23,
-      "MODERATE": 9,
-      "LOWER": 15,
-      "UNKNOWN": 0
+      "HIGH": 28,
+      "MODERATE": 5,
+      "LOWER": 17,
+      "UNKNOWN": 5
     },
     "findings_by_language": {
       "c": 13,
-      "python": 18,
+      "python": 26,
       "java": 16
     },
     "findings_by_algorithm": {
-      "RSA": 13,
-      "ECDSA": 8,
-      "AES-128": 9,
-      "AES-256": 3,
-      "SHA-256": 12,
+      "RSA": 16,
+      "ECDSA": 10,
+      "AES-128": 5,
+      "AES-256": 4,
+      "SHA-256": 13,
+      "AES-UNKNOWN": 5,
       "ECDH": 2
     }
   },
@@ -190,32 +191,36 @@
       "line_number": 15,
       "language": "python",
       "matched_api": "AES.new",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
+      "algorithm": "AES-UNKNOWN",
+      "risk_level": "UNKNOWN",
+      "replacement": "Determine the AES key size before assigning a risk level",
       "evidence": "cipher = AES.new(key, AES.MODE_GCM)",
       "detection_method": "ast",
       "confidence": "INFERRED",
+      "key_size": null,
       "parameters": {
         "key_bits": null
       },
-      "details": "AES cipher construction with key size UNKNOWN (inferred 128-bit)"
+      "assumed_default": false,
+      "details": "AES cipher construction with unknown key size"
     },
     {
       "file_path": "snippet_aes.py",
       "line_number": 32,
       "language": "python",
       "matched_api": "AES.new",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
+      "algorithm": "AES-UNKNOWN",
+      "risk_level": "UNKNOWN",
+      "replacement": "Determine the AES key size before assigning a risk level",
       "evidence": "cipher = AES.new(key, AES.MODE_GCM)",
       "detection_method": "ast",
       "confidence": "INFERRED",
+      "key_size": null,
       "parameters": {
         "key_bits": null
       },
-      "details": "AES cipher construction with key size UNKNOWN (inferred 128-bit)"
+      "assumed_default": false,
+      "details": "AES cipher construction with unknown key size"
     },
     {
       "file_path": "snippet_aes.py",
@@ -228,9 +233,11 @@
       "evidence": "digest = hashlib.sha256(data).hexdigest()",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "parameters": {
         "digest_bits": 256
       },
+      "assumed_default": false,
       "details": "SHA-256 cryptographic hash function invocation"
     },
     {
@@ -244,10 +251,48 @@
       "evidence": "h = hashlib.new(\"sha256\")",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "parameters": {
         "name": "sha256"
       },
+      "assumed_default": false,
       "details": "hashlib.new with SHA-256 digest"
+    },
+    {
+      "file_path": "snippet_aes.py",
+      "line_number": 14,
+      "language": "python",
+      "matched_api": "get_random_bytes(16)",
+      "algorithm": "AES-128",
+      "risk_level": "MODERATE",
+      "replacement": "Upgrade to AES-256",
+      "evidence": "key = get_random_bytes(16)          # 16 bytes = 128 bits",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_aes.py",
+      "line_number": 31,
+      "language": "python",
+      "matched_api": "get_random_bytes(32)",
+      "algorithm": "AES-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; AES-256 is quantum-safe at current security levels",
+      "evidence": "key = get_random_bytes(32)          # 32 bytes = 256 bits",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_aes.py",
+      "line_number": 48,
+      "language": "python",
+      "matched_api": "hashlib.new(\"sha256\"",
+      "algorithm": "SHA-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
+      "evidence": "h = hashlib.new(\"sha256\")",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
     },
     {
       "file_path": "snippet_ecc.py",
@@ -260,10 +305,12 @@
       "evidence": "private_key = ec.generate_private_key(ec.SECP256R1())",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "curve": "SECP256R1",
       "parameters": {
         "curve": "SECP256R1"
       },
+      "assumed_default": false,
       "details": "EC key pair generation with curve SECP256R1"
     },
     {
@@ -277,6 +324,8 @@
       "evidence": "return private_key.sign(message, ec.ECDSA(hashes.SHA256()))",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
+      "assumed_default": false,
       "details": "Elliptic Curve Digital Signature Algorithm (ECDSA) primitive invocation"
     },
     {
@@ -290,9 +339,11 @@
       "evidence": "return private_key.sign(message, ec.ECDSA(hashes.SHA256()))",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "parameters": {
         "digest_bits": 256
       },
+      "assumed_default": false,
       "details": "SHA-256 cryptographic hash function invocation"
     },
     {
@@ -306,6 +357,8 @@
       "evidence": "shared_key = private_key.exchange(ec.ECDH(), peer_public_key)",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
+      "assumed_default": false,
       "details": "Elliptic Curve Diffie-Hellman (ECDH) key exchange invocation"
     },
     {
@@ -319,11 +372,37 @@
       "evidence": "key = ECC.generate(curve=\"P-256\")",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "curve": "P-256",
       "parameters": {
         "curve": "P-256"
       },
+      "assumed_default": false,
       "details": "PyCryptodome ECC.generate with curve P-256"
+    },
+    {
+      "file_path": "snippet_ecc.py",
+      "line_number": 6,
+      "language": "python",
+      "matched_api": "from cryptography.hazmat.primitives.asymmetric import ec",
+      "algorithm": "ECDSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "evidence": "from cryptography.hazmat.primitives.asymmetric import ec",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_ecc.py",
+      "line_number": 28,
+      "language": "python",
+      "matched_api": "from Crypto.PublicKey import ECC",
+      "algorithm": "ECDSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "evidence": "from Crypto.PublicKey import ECC",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
     },
     {
       "file_path": "snippet_ecdsa.java",
@@ -414,9 +493,9 @@
       "line_number": 54,
       "language": "java",
       "matched_api": "AES",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
+      "algorithm": "AES-UNKNOWN",
+      "risk_level": "UNKNOWN",
+      "replacement": "Determine the AES key size before assigning a risk level",
       "evidence": "KeyGenerator keyGenerator = KeyGenerator.getInstance(\"AES\");",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -438,9 +517,9 @@
       "line_number": 61,
       "language": "java",
       "matched_api": "AES",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
+      "algorithm": "AES-UNKNOWN",
+      "risk_level": "UNKNOWN",
+      "replacement": "Determine the AES key size before assigning a risk level",
       "evidence": "Cipher cipher = Cipher.getInstance(\"AES/GCM/NoPadding\");",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -474,9 +553,9 @@
       "line_number": 69,
       "language": "java",
       "matched_api": "AES",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
+      "algorithm": "AES-UNKNOWN",
+      "risk_level": "UNKNOWN",
+      "replacement": "Determine the AES key size before assigning a risk level",
       "evidence": "KeyGenerator keyGenerator = KeyGenerator.getInstance(\"AES\");",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -532,6 +611,7 @@
       "parameters": {
         "bits": 1024
       },
+      "assumed_default": false,
       "details": "PyCryptodome RSA.generate with key size 1024 bits"
     },
     {
@@ -549,6 +629,7 @@
       "parameters": {
         "bits": 4096
       },
+      "assumed_default": false,
       "details": "PyCryptodome RSA.generate with key size 4096 bits"
     },
     {
@@ -562,10 +643,24 @@
       "evidence": "return CustomRSAKeyModule.generate(dynamic_size)",
       "detection_method": "ast",
       "confidence": "UNKNOWN",
+      "key_size": null,
       "parameters": {
         "bits": null
       },
+      "assumed_default": false,
       "details": "PyCryptodome RSA.generate with key size UNKNOWN bits"
+    },
+    {
+      "file_path": "snippet_edge_cases.py",
+      "line_number": 27,
+      "language": "python",
+      "matched_api": "from Crypto.PublicKey import RSA",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "from Crypto.PublicKey import RSA as CustomRSAKeyModule  # alias",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
     },
     {
       "file_path": "snippet_rsa.py",
@@ -578,10 +673,12 @@
       "evidence": "private_key = rsa.generate_private_key(",
       "detection_method": "ast",
       "confidence": "UNKNOWN",
+      "key_size": null,
       "parameters": {
         "key_size": null,
         "public_exponent": 65537
       },
+      "assumed_default": false,
       "details": "RSA private key generation with key size UNKNOWN bits"
     },
     {
@@ -595,9 +692,11 @@
       "evidence": "mgf=padding.MGF1(hashes.SHA256()),",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "parameters": {
         "digest_bits": 256
       },
+      "assumed_default": false,
       "details": "SHA-256 cryptographic hash function invocation"
     },
     {
@@ -611,9 +710,11 @@
       "evidence": "hashes.SHA256(),",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
       "parameters": {
         "digest_bits": 256
       },
+      "assumed_default": false,
       "details": "SHA-256 cryptographic hash function invocation"
     },
     {
@@ -631,6 +732,7 @@
       "parameters": {
         "bits": 2048
       },
+      "assumed_default": false,
       "details": "PyCryptodome RSA.generate with key size 2048 bits"
     },
     {
@@ -644,6 +746,8 @@
       "evidence": "cipher = PKCS1_OAEP.new(public_key)",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
+      "assumed_default": false,
       "details": "RSA-OAEP asymmetric encryption / key establishment"
     },
     {
@@ -657,13 +761,39 @@
       "evidence": "return _RSA.import_key(pem_data)",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
+      "key_size": null,
+      "assumed_default": false,
       "details": "PyCryptodome RSA.import_key invocation (imported key size determined at runtime)"
+    },
+    {
+      "file_path": "snippet_rsa.py",
+      "line_number": 8,
+      "language": "python",
+      "matched_api": "from cryptography.hazmat.primitives.asymmetric import rsa",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "from cryptography.hazmat.primitives.asymmetric import rsa, padding",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_rsa.py",
+      "line_number": 35,
+      "language": "python",
+      "matched_api": "from Crypto.PublicKey import RSA",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "from Crypto.PublicKey import RSA as _RSA",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
     }
   ],
   "scanner_limitations": [
     "Static analysis only: runtime-computed variables, dynamic class loaders, or network-retrieved keys cannot be evaluated statically.",
     "Regex detection on Java and C may flag cryptographic identifiers in inactive comments or string literals.",
     "AST scanning applies strictly to valid Python syntax; unparseable Python files report syntax error findings.",
-    "Conservative estimation: unknown AES key lengths default to AES-128 (MODERATE risk) per PS-P2 guidance."
+    "AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed."
   ]
 }

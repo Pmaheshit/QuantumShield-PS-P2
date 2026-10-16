@@ -122,6 +122,36 @@ class TestMetricCalculations:
         with pytest.raises(ValueError, match="expected one of"):
             evaluate_accuracy([], [], match_mode="family")
 
+    @pytest.mark.parametrize(
+        ("detected_algorithm", "expected_algorithm", "expected_matches"),
+        [
+            ("AES-UNKNOWN", "AES-128", False),
+            ("AES-128", "AES-UNKNOWN", False),
+            ("AES-UNKNOWN", "AES-UNKNOWN", True),
+            ("AES-192", "AES-128", False),
+        ],
+    )
+    def test_aes_variants_match_only_exact_algorithm_labels(
+        self, detected_algorithm, expected_algorithm, expected_matches
+    ):
+        detected = [
+            Finding(
+                "file.py", 10, "python", "AES.new", detected_algorithm,
+                "UNKNOWN", "manual review", "cipher = AES.new(key, mode)",
+            )
+        ]
+        expected = [
+            ExpectedFinding(
+                "file.py", 10, expected_algorithm, "UNKNOWN", True,
+            )
+        ]
+
+        metrics = evaluate_accuracy(detected, expected)
+
+        assert metrics.true_positives == int(expected_matches)
+        assert metrics.false_positives == int(not expected_matches)
+        assert metrics.false_negatives == int(not expected_matches)
+
     def test_empty_scan_coverage_is_rejected(self):
         with pytest.raises(ScanCoverageError, match="no source files were discovered"):
             evaluate_accuracy([], [], coverage=ScanCoverage(files_discovered=0, files_scanned=0))
@@ -306,6 +336,31 @@ class TestBenchmarkConfigurationAndErrors:
 
 
 class TestBenchmarkExecutionAndExports:
+    def test_adjacent_key_setup_does_not_match_expected_cipher_construction(
+        self, tmp_path
+    ):
+        source_file = tmp_path / "example.py"
+        source_file.write_text(
+            "key = get_random_bytes(16)\n"
+            "cipher = AES.new(key, AES.MODE_GCM)\n",
+            encoding="utf-8",
+        )
+        harness = BenchmarkHarness(
+            target_dir=tmp_path,
+            ground_truth={
+                "example.py": [
+                    ExpectedFinding("example.py", 2, "AES-128", "MODERATE", True)
+                ]
+            },
+            runs=1,
+        )
+
+        result = harness._benchmark_mode(use_ast=True)
+
+        assert result.accuracy.true_positives == 0
+        assert result.accuracy.false_positives == 2
+        assert result.accuracy.false_negatives == 1
+
     def test_benchmark_rejects_empty_source_directory(self, tmp_path):
         harness = BenchmarkHarness(
             target_dir=tmp_path,

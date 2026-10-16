@@ -74,14 +74,11 @@ class UnifiedScanner:
                     file_path,
                     language,
                 )
-                code_lines, code_error = self._python_code_lines_with_error(file_path)
-                if code_lines is not None:
-                    for regex_finding in regex_findings:
-                        if not self._matches_python_code(regex_finding, code_lines):
-                            continue
-                        if self._represented_by_ast(regex_finding, ast_findings):
-                            continue
-                        findings.append(regex_finding)
+                _, code_error = self._python_code_lines_with_error(file_path)
+                for regex_finding in regex_findings:
+                    if self._represented_by_ast(regex_finding, ast_findings):
+                        continue
+                    findings.append(regex_finding)
                 errors = [
                     outcome.reason
                     for outcome in (ast_outcome, regex_outcome)
@@ -140,12 +137,6 @@ class UnifiedScanner:
         return self.regex_scanner._iter_source_files()
 
     @staticmethod
-    def _python_code_lines(file_path: Path) -> Optional[list[str]]:
-        """Return source with comments and string literals masked, or None if tokenizing fails."""
-        lines, _ = UnifiedScanner._python_code_lines_with_error(file_path)
-        return lines
-
-    @staticmethod
     def _python_code_lines_with_error(
         file_path: Path,
     ) -> tuple[Optional[list[str]], str]:
@@ -170,12 +161,6 @@ class UnifiedScanner:
             return [line.rstrip("\r\n") for line in lines], ""
         except (OSError, IndentationError, SyntaxError, tokenize.TokenError) as exc:
             return None, str(exc)
-
-    @staticmethod
-    def _matches_python_code(finding: Finding, code_lines: list[str]) -> bool:
-        if not 1 <= finding.line_number <= len(code_lines):
-            return False
-        return finding.matched_api in code_lines[finding.line_number - 1]
 
     @staticmethod
     def _represented_by_ast(finding: Finding, ast_findings: list[AstFinding]) -> bool:

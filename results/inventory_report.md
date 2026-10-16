@@ -1,18 +1,18 @@
 # QuantumShield — Cryptographic Inventory & Migration Report
 
-**Generated:** `2026-10-14T10:58:41.791515+00:00`<br>
-**Target Directory:** `C:\Users\ASUS\Desktop\QuantumShield-PS-P2\tests\fixtures`<br>
+**Generated:** `2026-10-16T05:10:31.932869+00:00`<br>
+**Target Directory:** `C:\Users\DINESHBABU\QuantumShield-PS-P2\tests\fixtures`<br>
 **Files Scanned:** 7<br>
-**Total Cryptographic Findings:** 47
+**Total Cryptographic Findings:** 55
 
 ## 1. Executive Summary
 
 | Risk Level | Count | Threat Rationale | Migration Priority |
 | :--- | :---: | :--- | :--- |
-| 🔴 **HIGH** | 23 | Vulnerable to Shor's Algorithm (RSA / ECC broken) | Immediate (Phase 1 Target) |
-| 🟡 **MODERATE** | 9 | Key space halved by Grover's Algorithm (AES-128) | Medium (Upgrade to AES-256) |
-| 🟢 **LOWER** | 15 | Quantum-resistant symmetric baseline (AES-256, SHA-256) | Low / Retain current baseline |
-| ⚪ **UNKNOWN** | 0 | Unrecognized / Unparseable source element | Requires manual review |
+| 🔴 **HIGH** | 28 | Vulnerable to Shor's Algorithm (RSA / ECC broken) | Immediate (Phase 1 Target) |
+| 🟡 **MODERATE** | 5 | Key space halved by Grover's Algorithm (AES-128) | Medium (Upgrade to AES-256) |
+| 🟢 **LOWER** | 17 | Quantum-resistant symmetric baseline (AES-256, SHA-256) | Low / Retain current baseline |
+| ⚪ **UNKNOWN** | 5 | Unresolved algorithm or key size, or unparseable source element | Requires manual review |
 
 ## 2. Findings Breakdown
 
@@ -22,18 +22,19 @@
 | :--- | :---: |
 | `c` | 13 |
 | `java` | 16 |
-| `python` | 18 |
+| `python` | 26 |
 
 ### By Algorithm
 
 | Algorithm | Risk Level | Findings Count | Recommended Replacement |
 | :--- | :--- | :---: | :--- |
-| **AES-128** | `MODERATE` | 9 | Upgrade to AES-256 |
-| **AES-256** | `LOWER` | 3 | No change required; AES-256 is quantum-safe at current security levels |
+| **AES-128** | `MODERATE` | 5 | Upgrade to AES-256 |
+| **AES-256** | `LOWER` | 4 | No change required; AES-256 is quantum-safe at current security levels |
+| **AES-UNKNOWN** | `UNKNOWN` | 5 | Determine the AES key size before assigning a risk level |
 | **ECDH** | `HIGH` | 2 | ML-KEM (FIPS 203) for key exchange |
-| **ECDSA** | `HIGH` | 8 | ML-DSA (FIPS 204) for signatures |
-| **RSA** | `HIGH` | 13 | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| **SHA-256** | `LOWER` | 12 | No change required; SHA-256 remains acceptable post-quantum |
+| **ECDSA** | `HIGH` | 10 | ML-DSA (FIPS 204) for signatures |
+| **RSA** | `HIGH` | 16 | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| **SHA-256** | `LOWER` | 13 | No change required; SHA-256 remains acceptable post-quantum |
 
 ## 3. Inventory Details
 
@@ -52,40 +53,48 @@
 | 11 | `snippet_aes.c:92` | `c` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
 | 12 | `snippet_aes.c:95` | `c` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
 | 13 | `snippet_aes.c:97` | `c` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
-| 14 | `snippet_aes.py:15` | `python` | **AES-128** | `MODERATE` | `ast` | `INFERRED` | Upgrade to AES-256 |
-| 15 | `snippet_aes.py:32` | `python` | **AES-128** | `MODERATE` | `ast` | `INFERRED` | Upgrade to AES-256 |
+| 14 | `snippet_aes.py:15` | `python` | **AES-UNKNOWN** | `UNKNOWN` | `ast` | `INFERRED` | Determine the AES key size before assigning a risk level |
+| 15 | `snippet_aes.py:32` | `python` | **AES-UNKNOWN** | `UNKNOWN` | `ast` | `INFERRED` | Determine the AES key size before assigning a risk level |
 | 16 | `snippet_aes.py:43` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
 | 17 | `snippet_aes.py:48` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
-| 18 | `snippet_ecc.py:12` | `python` | **ECDSA** | `HIGH` | `ast` | `CONFIRMED` | ML-DSA (FIPS 204) for signatures |
-| 19 | `snippet_ecc.py:18` | `python` | **ECDSA** | `HIGH` | `ast` | `CONFIRMED` | ML-DSA (FIPS 204) for signatures |
-| 20 | `snippet_ecc.py:18` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
-| 21 | `snippet_ecc.py:23` | `python` | **ECDH** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (FIPS 203) for key exchange |
-| 22 | `snippet_ecc.py:32` | `python` | **ECDSA** | `HIGH` | `ast` | `CONFIRMED` | ML-DSA (FIPS 204) for signatures |
-| 23 | `snippet_ecdsa.java:15` | `java` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 24 | `snippet_ecdsa.java:22` | `java` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 25 | `snippet_ecdsa.java:29` | `java` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
-| 26 | `snippet_ecdsa.java:30` | `java` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
-| 27 | `snippet_ecdsa.java:37` | `java` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
-| 28 | `snippet_ecdsa.java:46` | `java` | **ECDH** | `HIGH` | `regex` | `INFERRED` | ML-KEM (FIPS 203) for key exchange |
-| 29 | `snippet_ecdsa.java:52` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
-| 30 | `snippet_ecdsa.java:54` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
-| 31 | `snippet_ecdsa.java:55` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
-| 32 | `snippet_ecdsa.java:61` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
-| 33 | `snippet_ecdsa.java:62` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
-| 34 | `snippet_ecdsa.java:67` | `java` | **AES-256** | `LOWER` | `regex` | `INFERRED` | No change required; AES-256 is quantum-safe at current security levels |
-| 35 | `snippet_ecdsa.java:69` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
-| 36 | `snippet_ecdsa.java:70` | `java` | **AES-256** | `LOWER` | `regex` | `INFERRED` | No change required; AES-256 is quantum-safe at current security levels |
-| 37 | `snippet_ecdsa.java:74` | `java` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
-| 38 | `snippet_ecdsa.java:77` | `java` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
-| 39 | `snippet_edge_cases.py:32` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 40 | `snippet_edge_cases.py:37` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 41 | `snippet_edge_cases.py:42` | `python` | **RSA** | `HIGH` | `ast` | `UNKNOWN` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 42 | `snippet_rsa.py:13` | `python` | **RSA** | `HIGH` | `ast` | `UNKNOWN` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 43 | `snippet_rsa.py:26` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
-| 44 | `snippet_rsa.py:29` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
-| 45 | `snippet_rsa.py:39` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
-| 46 | `snippet_rsa.py:41` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (FIPS 203) for key establishment / encapsulation |
-| 47 | `snippet_rsa.py:48` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 18 | `snippet_aes.py:14` | `python` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
+| 19 | `snippet_aes.py:31` | `python` | **AES-256** | `LOWER` | `regex` | `INFERRED` | No change required; AES-256 is quantum-safe at current security levels |
+| 20 | `snippet_aes.py:48` | `python` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
+| 21 | `snippet_ecc.py:12` | `python` | **ECDSA** | `HIGH` | `ast` | `CONFIRMED` | ML-DSA (FIPS 204) for signatures |
+| 22 | `snippet_ecc.py:18` | `python` | **ECDSA** | `HIGH` | `ast` | `CONFIRMED` | ML-DSA (FIPS 204) for signatures |
+| 23 | `snippet_ecc.py:18` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
+| 24 | `snippet_ecc.py:23` | `python` | **ECDH** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (FIPS 203) for key exchange |
+| 25 | `snippet_ecc.py:32` | `python` | **ECDSA** | `HIGH` | `ast` | `CONFIRMED` | ML-DSA (FIPS 204) for signatures |
+| 26 | `snippet_ecc.py:6` | `python` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
+| 27 | `snippet_ecc.py:28` | `python` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
+| 28 | `snippet_ecdsa.java:15` | `java` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 29 | `snippet_ecdsa.java:22` | `java` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 30 | `snippet_ecdsa.java:29` | `java` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
+| 31 | `snippet_ecdsa.java:30` | `java` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
+| 32 | `snippet_ecdsa.java:37` | `java` | **ECDSA** | `HIGH` | `regex` | `INFERRED` | ML-DSA (FIPS 204) for signatures |
+| 33 | `snippet_ecdsa.java:46` | `java` | **ECDH** | `HIGH` | `regex` | `INFERRED` | ML-KEM (FIPS 203) for key exchange |
+| 34 | `snippet_ecdsa.java:52` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
+| 35 | `snippet_ecdsa.java:54` | `java` | **AES-UNKNOWN** | `UNKNOWN` | `regex` | `INFERRED` | Determine the AES key size before assigning a risk level |
+| 36 | `snippet_ecdsa.java:55` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
+| 37 | `snippet_ecdsa.java:61` | `java` | **AES-UNKNOWN** | `UNKNOWN` | `regex` | `INFERRED` | Determine the AES key size before assigning a risk level |
+| 38 | `snippet_ecdsa.java:62` | `java` | **AES-128** | `MODERATE` | `regex` | `INFERRED` | Upgrade to AES-256 |
+| 39 | `snippet_ecdsa.java:67` | `java` | **AES-256** | `LOWER` | `regex` | `INFERRED` | No change required; AES-256 is quantum-safe at current security levels |
+| 40 | `snippet_ecdsa.java:69` | `java` | **AES-UNKNOWN** | `UNKNOWN` | `regex` | `INFERRED` | Determine the AES key size before assigning a risk level |
+| 41 | `snippet_ecdsa.java:70` | `java` | **AES-256** | `LOWER` | `regex` | `INFERRED` | No change required; AES-256 is quantum-safe at current security levels |
+| 42 | `snippet_ecdsa.java:74` | `java` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
+| 43 | `snippet_ecdsa.java:77` | `java` | **SHA-256** | `LOWER` | `regex` | `INFERRED` | No change required; SHA-256 remains acceptable post-quantum |
+| 44 | `snippet_edge_cases.py:32` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 45 | `snippet_edge_cases.py:37` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 46 | `snippet_edge_cases.py:42` | `python` | **RSA** | `HIGH` | `ast` | `UNKNOWN` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 47 | `snippet_edge_cases.py:27` | `python` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 48 | `snippet_rsa.py:13` | `python` | **RSA** | `HIGH` | `ast` | `UNKNOWN` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 49 | `snippet_rsa.py:26` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
+| 50 | `snippet_rsa.py:29` | `python` | **SHA-256** | `LOWER` | `ast` | `CONFIRMED` | No change required; SHA-256 remains acceptable post-quantum |
+| 51 | `snippet_rsa.py:39` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 52 | `snippet_rsa.py:41` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (FIPS 203) for key establishment / encapsulation |
+| 53 | `snippet_rsa.py:48` | `python` | **RSA** | `HIGH` | `ast` | `CONFIRMED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 54 | `snippet_rsa.py:8` | `python` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
+| 55 | `snippet_rsa.py:35` | `python` | **RSA** | `HIGH` | `regex` | `INFERRED` | ML-KEM (key encapsulation) or ML-DSA (signatures) |
 
 ### Evidence & Code Context
 
@@ -206,25 +215,25 @@ unsigned int dlen = SHA256_DIGEST_LENGTH;
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #14: AES-128 in `snippet_aes.py:15`
+#### Finding #14: AES-UNKNOWN in `snippet_aes.py:15`
 - **Matched API:** `AES.new`
 - **Detection Method:** `ast` (Confidence: `INFERRED`)
-- **Analysis Note:** AES cipher construction with key size UNKNOWN (inferred 128-bit)
+- **Analysis Note:** AES cipher construction with unknown key size
 - **Evidence Snippet:**
 ```
 cipher = AES.new(key, AES.MODE_GCM)
 ```
-- **Migration Recommendation:** Upgrade to AES-256
+- **Migration Recommendation:** Determine the AES key size before assigning a risk level
 
-#### Finding #15: AES-128 in `snippet_aes.py:32`
+#### Finding #15: AES-UNKNOWN in `snippet_aes.py:32`
 - **Matched API:** `AES.new`
 - **Detection Method:** `ast` (Confidence: `INFERRED`)
-- **Analysis Note:** AES cipher construction with key size UNKNOWN (inferred 128-bit)
+- **Analysis Note:** AES cipher construction with unknown key size
 - **Evidence Snippet:**
 ```
 cipher = AES.new(key, AES.MODE_GCM)
 ```
-- **Migration Recommendation:** Upgrade to AES-256
+- **Migration Recommendation:** Determine the AES key size before assigning a risk level
 
 #### Finding #16: SHA-256 in `snippet_aes.py:43`
 - **Matched API:** `hashlib.sha256`
@@ -246,7 +255,34 @@ h = hashlib.new("sha256")
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #18: ECDSA in `snippet_ecc.py:12`
+#### Finding #18: AES-128 in `snippet_aes.py:14`
+- **Matched API:** `get_random_bytes(16)`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+key = get_random_bytes(16)          # 16 bytes = 128 bits
+```
+- **Migration Recommendation:** Upgrade to AES-256
+
+#### Finding #19: AES-256 in `snippet_aes.py:31`
+- **Matched API:** `get_random_bytes(32)`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+key = get_random_bytes(32)          # 32 bytes = 256 bits
+```
+- **Migration Recommendation:** No change required; AES-256 is quantum-safe at current security levels
+
+#### Finding #20: SHA-256 in `snippet_aes.py:48`
+- **Matched API:** `hashlib.new("sha256"`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+h = hashlib.new("sha256")
+```
+- **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
+
+#### Finding #21: ECDSA in `snippet_ecc.py:12`
 - **Matched API:** `ec.generate_private_key`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Elliptic Curve:** `SECP256R1`
@@ -257,7 +293,7 @@ private_key = ec.generate_private_key(ec.SECP256R1())
 ```
 - **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
 
-#### Finding #19: ECDSA in `snippet_ecc.py:18`
+#### Finding #22: ECDSA in `snippet_ecc.py:18`
 - **Matched API:** `ec.ECDSA`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** Elliptic Curve Digital Signature Algorithm (ECDSA) primitive invocation
@@ -267,7 +303,7 @@ return private_key.sign(message, ec.ECDSA(hashes.SHA256()))
 ```
 - **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
 
-#### Finding #20: SHA-256 in `snippet_ecc.py:18`
+#### Finding #23: SHA-256 in `snippet_ecc.py:18`
 - **Matched API:** `cryptography.hazmat.primitives.hashes.SHA256`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** SHA-256 cryptographic hash function invocation
@@ -277,7 +313,7 @@ return private_key.sign(message, ec.ECDSA(hashes.SHA256()))
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #21: ECDH in `snippet_ecc.py:23`
+#### Finding #24: ECDH in `snippet_ecc.py:23`
 - **Matched API:** `ec.ECDH`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** Elliptic Curve Diffie-Hellman (ECDH) key exchange invocation
@@ -287,7 +323,7 @@ shared_key = private_key.exchange(ec.ECDH(), peer_public_key)
 ```
 - **Migration Recommendation:** ML-KEM (FIPS 203) for key exchange
 
-#### Finding #22: ECDSA in `snippet_ecc.py:32`
+#### Finding #25: ECDSA in `snippet_ecc.py:32`
 - **Matched API:** `ECC.generate`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Elliptic Curve:** `P-256`
@@ -298,7 +334,25 @@ key = ECC.generate(curve="P-256")
 ```
 - **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
 
-#### Finding #23: RSA in `snippet_ecdsa.java:15`
+#### Finding #26: ECDSA in `snippet_ecc.py:6`
+- **Matched API:** `from cryptography.hazmat.primitives.asymmetric import ec`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+from cryptography.hazmat.primitives.asymmetric import ec
+```
+- **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
+
+#### Finding #27: ECDSA in `snippet_ecc.py:28`
+- **Matched API:** `from Crypto.PublicKey import ECC`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+from Crypto.PublicKey import ECC
+```
+- **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
+
+#### Finding #28: RSA in `snippet_ecdsa.java:15`
 - **Matched API:** `RSA`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -307,7 +361,7 @@ KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #24: RSA in `snippet_ecdsa.java:22`
+#### Finding #29: RSA in `snippet_ecdsa.java:22`
 - **Matched API:** `RSA`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -316,7 +370,7 @@ Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #25: ECDSA in `snippet_ecdsa.java:29`
+#### Finding #30: ECDSA in `snippet_ecdsa.java:29`
 - **Matched API:** `EC`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -325,7 +379,7 @@ KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
 ```
 - **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
 
-#### Finding #26: ECDSA in `snippet_ecdsa.java:30`
+#### Finding #31: ECDSA in `snippet_ecdsa.java:30`
 - **Matched API:** `ECGenParameterSpec`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -334,7 +388,7 @@ ECGenParameterSpec ecSpec = new ECGenParameterSpec("secp256r1");
 ```
 - **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
 
-#### Finding #27: ECDSA in `snippet_ecdsa.java:37`
+#### Finding #32: ECDSA in `snippet_ecdsa.java:37`
 - **Matched API:** `SHA256withECDSA`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -343,7 +397,7 @@ Signature sig = Signature.getInstance("SHA256withECDSA");
 ```
 - **Migration Recommendation:** ML-DSA (FIPS 204) for signatures
 
-#### Finding #28: ECDH in `snippet_ecdsa.java:46`
+#### Finding #33: ECDH in `snippet_ecdsa.java:46`
 - **Matched API:** `ECDH`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -352,7 +406,7 @@ KeyAgreement ka = KeyAgreement.getInstance("ECDH");
 ```
 - **Migration Recommendation:** ML-KEM (FIPS 203) for key exchange
 
-#### Finding #29: AES-128 in `snippet_ecdsa.java:52`
+#### Finding #34: AES-128 in `snippet_ecdsa.java:52`
 - **Matched API:** `AES-128`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -361,16 +415,16 @@ KeyAgreement ka = KeyAgreement.getInstance("ECDH");
 ```
 - **Migration Recommendation:** Upgrade to AES-256
 
-#### Finding #30: AES-128 in `snippet_ecdsa.java:54`
+#### Finding #35: AES-UNKNOWN in `snippet_ecdsa.java:54`
 - **Matched API:** `AES`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
 ```
 KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
 ```
-- **Migration Recommendation:** Upgrade to AES-256
+- **Migration Recommendation:** Determine the AES key size before assigning a risk level
 
-#### Finding #31: AES-128 in `snippet_ecdsa.java:55`
+#### Finding #36: AES-128 in `snippet_ecdsa.java:55`
 - **Matched API:** `128`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -379,16 +433,16 @@ keyGenerator.init(128);          // 128-bit key
 ```
 - **Migration Recommendation:** Upgrade to AES-256
 
-#### Finding #32: AES-128 in `snippet_ecdsa.java:61`
+#### Finding #37: AES-UNKNOWN in `snippet_ecdsa.java:61`
 - **Matched API:** `AES`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
 ```
 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
 ```
-- **Migration Recommendation:** Upgrade to AES-256
+- **Migration Recommendation:** Determine the AES key size before assigning a risk level
 
-#### Finding #33: AES-128 in `snippet_ecdsa.java:62`
+#### Finding #38: AES-128 in `snippet_ecdsa.java:62`
 - **Matched API:** `AES-128`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -397,7 +451,7 @@ Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
 ```
 - **Migration Recommendation:** Upgrade to AES-256
 
-#### Finding #34: AES-256 in `snippet_ecdsa.java:67`
+#### Finding #39: AES-256 in `snippet_ecdsa.java:67`
 - **Matched API:** `AES-256`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -406,16 +460,16 @@ Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
 ```
 - **Migration Recommendation:** No change required; AES-256 is quantum-safe at current security levels
 
-#### Finding #35: AES-128 in `snippet_ecdsa.java:69`
+#### Finding #40: AES-UNKNOWN in `snippet_ecdsa.java:69`
 - **Matched API:** `AES`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
 ```
 KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
 ```
-- **Migration Recommendation:** Upgrade to AES-256
+- **Migration Recommendation:** Determine the AES key size before assigning a risk level
 
-#### Finding #36: AES-256 in `snippet_ecdsa.java:70`
+#### Finding #41: AES-256 in `snippet_ecdsa.java:70`
 - **Matched API:** `256`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -424,7 +478,7 @@ keyGenerator.init(256);          // 256-bit key
 ```
 - **Migration Recommendation:** No change required; AES-256 is quantum-safe at current security levels
 
-#### Finding #37: SHA-256 in `snippet_ecdsa.java:74`
+#### Finding #42: SHA-256 in `snippet_ecdsa.java:74`
 - **Matched API:** `SHA-256`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -433,7 +487,7 @@ keyGenerator.init(256);          // 256-bit key
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #38: SHA-256 in `snippet_ecdsa.java:77`
+#### Finding #43: SHA-256 in `snippet_ecdsa.java:77`
 - **Matched API:** `SHA-256`
 - **Detection Method:** `regex` (Confidence: `INFERRED`)
 - **Evidence Snippet:**
@@ -442,7 +496,7 @@ MessageDigest md = MessageDigest.getInstance("SHA-256");
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #39: RSA in `snippet_edge_cases.py:32`
+#### Finding #44: RSA in `snippet_edge_cases.py:32`
 - **Matched API:** `RSA.generate`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Static Key Size:** 1024 bits
@@ -453,7 +507,7 @@ return CustomRSAKeyModule.generate(1024)
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #40: RSA in `snippet_edge_cases.py:37`
+#### Finding #45: RSA in `snippet_edge_cases.py:37`
 - **Matched API:** `RSA.generate`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Static Key Size:** 4096 bits
@@ -464,7 +518,7 @@ return CustomRSAKeyModule.generate(4096)
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #41: RSA in `snippet_edge_cases.py:42`
+#### Finding #46: RSA in `snippet_edge_cases.py:42`
 - **Matched API:** `RSA.generate`
 - **Detection Method:** `ast` (Confidence: `UNKNOWN`)
 - **Analysis Note:** PyCryptodome RSA.generate with key size UNKNOWN bits
@@ -474,7 +528,16 @@ return CustomRSAKeyModule.generate(dynamic_size)
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #42: RSA in `snippet_rsa.py:13`
+#### Finding #47: RSA in `snippet_edge_cases.py:27`
+- **Matched API:** `from Crypto.PublicKey import RSA`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+from Crypto.PublicKey import RSA as CustomRSAKeyModule  # alias
+```
+- **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
+
+#### Finding #48: RSA in `snippet_rsa.py:13`
 - **Matched API:** `rsa.generate_private_key`
 - **Detection Method:** `ast` (Confidence: `UNKNOWN`)
 - **Analysis Note:** RSA private key generation with key size UNKNOWN bits
@@ -484,7 +547,7 @@ private_key = rsa.generate_private_key(
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #43: SHA-256 in `snippet_rsa.py:26`
+#### Finding #49: SHA-256 in `snippet_rsa.py:26`
 - **Matched API:** `cryptography.hazmat.primitives.hashes.SHA256`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** SHA-256 cryptographic hash function invocation
@@ -494,7 +557,7 @@ mgf=padding.MGF1(hashes.SHA256()),
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #44: SHA-256 in `snippet_rsa.py:29`
+#### Finding #50: SHA-256 in `snippet_rsa.py:29`
 - **Matched API:** `cryptography.hazmat.primitives.hashes.SHA256`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** SHA-256 cryptographic hash function invocation
@@ -504,7 +567,7 @@ hashes.SHA256(),
 ```
 - **Migration Recommendation:** No change required; SHA-256 remains acceptable post-quantum
 
-#### Finding #45: RSA in `snippet_rsa.py:39`
+#### Finding #51: RSA in `snippet_rsa.py:39`
 - **Matched API:** `RSA.generate`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Static Key Size:** 2048 bits
@@ -515,7 +578,7 @@ key = _RSA.generate(2048)
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
-#### Finding #46: RSA in `snippet_rsa.py:41`
+#### Finding #52: RSA in `snippet_rsa.py:41`
 - **Matched API:** `PKCS1_OAEP.new`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** RSA-OAEP asymmetric encryption / key establishment
@@ -525,7 +588,7 @@ cipher = PKCS1_OAEP.new(public_key)
 ```
 - **Migration Recommendation:** ML-KEM (FIPS 203) for key establishment / encapsulation
 
-#### Finding #47: RSA in `snippet_rsa.py:48`
+#### Finding #53: RSA in `snippet_rsa.py:48`
 - **Matched API:** `RSA.import_key`
 - **Detection Method:** `ast` (Confidence: `CONFIRMED`)
 - **Analysis Note:** PyCryptodome RSA.import_key invocation (imported key size determined at runtime)
@@ -535,9 +598,27 @@ return _RSA.import_key(pem_data)
 ```
 - **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
 
+#### Finding #54: RSA in `snippet_rsa.py:8`
+- **Matched API:** `from cryptography.hazmat.primitives.asymmetric import rsa`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+```
+- **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
+
+#### Finding #55: RSA in `snippet_rsa.py:35`
+- **Matched API:** `from Crypto.PublicKey import RSA`
+- **Detection Method:** `regex` (Confidence: `INFERRED`)
+- **Evidence Snippet:**
+```
+from Crypto.PublicKey import RSA as _RSA
+```
+- **Migration Recommendation:** ML-KEM (key encapsulation) or ML-DSA (signatures)
+
 ## 4. Scanner Limitations & Operational Assumptions
 
 - Static analysis only: runtime-computed variables, dynamic class loaders, or network-retrieved keys cannot be evaluated statically.
 - Regex detection on Java and C may flag cryptographic identifiers in inactive comments or string literals.
 - AST scanning applies strictly to valid Python syntax; unparseable Python files report syntax error findings.
-- Conservative estimation: unknown AES key lengths default to AES-128 (MODERATE risk) per PS-P2 guidance.
+- AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed.

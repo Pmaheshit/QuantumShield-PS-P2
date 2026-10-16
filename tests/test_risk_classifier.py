@@ -127,6 +127,21 @@ class TestLowerRisk:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class TestUnknown:
+    @pytest.mark.parametrize("algorithm", ["AES-UNKNOWN", "aes-unknown"])
+    def test_unknown_aes_size_preserves_family_and_unknown_risk(self, clf, algorithm):
+        profile = clf.classify(algorithm)
+
+        assert profile.algorithm == "AES-UNKNOWN"
+        assert profile.level == RiskLevel.UNKNOWN
+        assert "AES" in profile.reason
+
+    def test_aes192_remains_distinct_without_invented_risk_level(self, clf):
+        profile = clf.classify("AES-192")
+
+        assert profile.algorithm == "AES-192"
+        assert profile.level == RiskLevel.UNKNOWN
+        assert "AES-192" in profile.reason
+
     def test_unknown_algo_returns_unknown_level(self, clf):
         p = clf.classify("BLOWFISH")
         assert p.level == RiskLevel.UNKNOWN

@@ -631,13 +631,23 @@ class _CryptoAstVisitor(ast.NodeVisitor):
 
         # Direct bytes constant: b"..."
         val = self._extract_constant_val(node)
-        if isinstance(val, (bytes, str)):
+        if isinstance(val, bytes):
             length = len(val) * 8
             if length in (128, 192, 256):
                 return length, "CONFIRMED"
 
-        # get_random_bytes(16) or urandom(32)
-        if isinstance(node, ast.Call):
+        # Only recognize known byte-generating APIs; arbitrary calls accepting
+        # a size-like argument do not establish the returned key length.
+        if isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
+            base, attr = self._resolve_callable_name(node.func)
+            callable_name = f"{base}.{attr}" if attr else base
+            known_byte_generators = {
+                "Crypto.Random.get_random_bytes",
+                "os.urandom",
+            }
+            if callable_name not in known_byte_generators:
+                return None, "UNKNOWN"
+
             arg_val = self._extract_constant_val(node.args[0]) if node.args else None
             if isinstance(arg_val, int):
                 length = arg_val * 8

@@ -51,6 +51,8 @@ from .metrics import (
 )
 from ..scanner.scan_result import FileScanOutcome, ScanResult
 
+_BENCHMARK_LINE_MATCH_TOLERANCE = 0
+
 
 @dataclass
 class EnvironmentSpec:
@@ -227,6 +229,7 @@ class BenchmarkHarness:
                 "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "target_directory": str(self.target_dir),
                 "runs_per_mode": self.runs,
+                "line_match_tolerance": _BENCHMARK_LINE_MATCH_TOLERANCE,
                 "environment": self.env.to_dict(),
             },
             "platform_configurations_status": {
@@ -308,6 +311,7 @@ class BenchmarkHarness:
         acc = evaluate_accuracy(
             findings,
             expected,
+            match_line_tolerance=_BENCHMARK_LINE_MATCH_TOLERANCE,
             coverage=coverage,
         )
 
@@ -363,6 +367,7 @@ class BenchmarkHarness:
         acc = evaluate_accuracy(
             findings,
             expected,
+            match_line_tolerance=_BENCHMARK_LINE_MATCH_TOLERANCE,
             coverage=coverage,
         )
 
@@ -421,6 +426,7 @@ class BenchmarkHarness:
         acc = evaluate_accuracy(
             findings,
             expected,
+            match_line_tolerance=_BENCHMARK_LINE_MATCH_TOLERANCE,
             coverage=coverage,
         )
 
@@ -597,6 +603,7 @@ class BenchmarkHarness:
             "  Per-file input-size boundary at 64 MB (not an OS-level process heap limit).",
             "- **Ground Truth Note:** Evaluated only against fixtures present in the scanned directory. "
             "  Organizers' planted sample repository is withheld until judging.",
+            "- **Ground Truth Matching:** Exact source line and algorithm name (case-insensitive).",
             "",
             "## 2. Accuracy Comparison (Precision / Recall / F1)",
             "",

@@ -94,3 +94,123 @@ class TestUnifiedScanner:
 
         assert len(call_findings) == 1
         assert call_findings[0].detection_method == "ast"
+
+    def test_multiline_api_call_is_retained_once(self, tmp_path):
+        source = (
+            "from cryptography.hazmat.primitives.asymmetric import rsa\n"
+            "private_key = rsa.generate_private_key(\n"
+            "    public_exponent=65537,\n"
+            "    key_size=2048,\n"
+            ")\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+        call_findings = [
+            finding for finding in findings
+            if finding.algorithm == "RSA" and finding.line_number == 2
+        ]
+
+        assert len(call_findings) == 1
+        assert call_findings[0].detection_method == "ast"
+
+    def test_nested_supported_calls_keep_ast_occurrences_without_regex_duplicate(
+        self, tmp_path
+    ):
+        source = (
+            "import hashlib\n"
+            "digest = hashlib.sha256(hashlib.sha256(data).digest()).digest()\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+        hash_findings = [
+            finding for finding in findings
+            if finding.algorithm == "SHA-256" and finding.line_number == 2
+        ]
+
+        assert len(hash_findings) == 2
+        assert all(finding.detection_method == "ast" for finding in hash_findings)
+
+    def test_import_finding_is_retained(self, tmp_path):
+        source = "from cryptography.hazmat.primitives.asymmetric import rsa\n"
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+
+        assert len(findings) == 1
+        assert findings[0].line_number == 1
+        assert findings[0].algorithm == "RSA"
+        assert findings[0].detection_method == "regex"
+
+    def test_comments_between_tokens_do_not_hide_call_or_add_false_positive(
+        self, tmp_path
+    ):
+        source = (
+            "from cryptography.hazmat.primitives.asymmetric import rsa\n"
+            "key = (\n"
+            "    rsa.generate_private_key  # RSA.generate(1024) is only a comment\n"
+            "    (\n"
+            "        public_exponent=65537,\n"
+            "        key_size=2048,\n"
+            "    )\n"
+            ")\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+        call_findings = [
+            finding
+            for finding in findings
+            if finding.algorithm == "RSA" and finding.line_number == 3
+        ]
+
+        assert len(call_findings) == 1
+        assert call_findings[0].detection_method == "ast"
+        assert len(findings) == 2  # one import finding and one call finding
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "# rsa.generate_private_key(2048)\n",
+            'documentation = "rsa.generate_private_key(2048)"\n',
+        ],
+    )
+    def test_api_name_only_in_comment_or_string_is_ignored(self, tmp_path, source):
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        assert scanner.scan() == []
+
+    def test_tokenization_failure_keeps_best_effort_regex_finding(self, tmp_path):
+        source = (
+            "private_key = create_rsa_key(2048)\n"
+            'documentation = """unterminated string\n'
+        )
+        file_path = tmp_path / "malformed.py"
+        file_path.write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        masked_lines, tokenization_error = scanner._python_code_lines_with_error(
+            file_path
+        )
+        assert masked_lines is None
+        assert tokenization_error
+
+        result = scanner.scan_with_outcomes()
+
+        assert any(
+            finding.detection_method == "ast_error"
+            for finding in result.findings
+        )
+        assert any(
+            finding.matched_api == "create_rsa_key"
+            and finding.detection_method == "regex"
+            for finding in result.findings
+        )
+        assert result.outcomes[0].status == "failed"
+        assert result.outcomes[0].reason

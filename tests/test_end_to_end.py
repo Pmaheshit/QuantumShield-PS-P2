@@ -15,11 +15,50 @@ from pathlib import Path
 import pytest
 
 from main import run_full_pipeline
+from src.benchmark.ground_truth import ExpectedFinding
+from src.benchmark.metrics import evaluate_accuracy
+from src.reporting.inventory_report import InventoryReportGenerator
+from src.scanner.risk_classifier import RiskLevel
+from src.scanner.unified_scanner import UnifiedScanner
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 class TestEndToEndPipeline:
+    def test_unknown_aes_key_stays_unresolved_through_scan_reports_and_metrics(
+        self, tmp_path
+    ):
+        source = "cipher = AES.new(key_from_kms, AES.MODE_GCM)\n"
+        file_path = tmp_path / "unknown_aes.py"
+        file_path.write_text(source, encoding="utf-8")
+
+        scan_result = UnifiedScanner(file_path, use_ast_for_python=True).scan_with_outcomes()
+        findings = scan_result.findings
+        assert len(findings) == 1
+        finding = findings[0]
+        assert finding.algorithm == "AES-UNKNOWN"
+        assert finding.risk_level == RiskLevel.UNKNOWN
+        assert finding.key_size is None
+        assert finding.confidence == "INFERRED"
+        assert len(findings) == 1
+
+        generator = InventoryReportGenerator(findings)
+        json_finding = json.loads(generator.generate_json())["findings"][0]
+        markdown = generator.generate_markdown()
+        assert json_finding["algorithm"] == "AES-UNKNOWN"
+        assert json_finding["risk_level"] == RiskLevel.UNKNOWN
+        assert json_finding["key_size"] is None
+        assert "AES-UNKNOWN" in markdown
+        assert "`UNKNOWN`" in markdown
+
+        metrics = evaluate_accuracy(
+            findings,
+            [ExpectedFinding("unknown_aes.py", 1, "AES-128", "MODERATE", True)],
+        )
+        assert metrics.true_positives == 0
+        assert metrics.false_positives == 1
+        assert metrics.false_negatives == 1
+
     def test_complete_pipeline_execution(self, tmp_path):
         out_dir = tmp_path / "results"
         results = run_full_pipeline(scan_dir=FIXTURES_DIR, runs=2, output_dir=out_dir)

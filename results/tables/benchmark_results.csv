@@ -1,5 +1,5 @@
-mode,runs,mean_time_ms,min_time_ms,max_time_ms,stdev_time_ms,peak_memory_kb,total_detected,true_positives,false_positives,false_negatives,precision,recall,f1_score
-regex_only,10,18.203,16.757,20.983,1.417,185.99,68,13,55,5,0.1912,0.7222,0.3023
-ast_enriched,10,18.52,17.803,21.428,1.058,209.1,47,17,30,1,0.3617,0.9444,0.5231
-platform_b,10,18.762,17.375,21.593,1.367,200.32,47,17,30,1,0.3617,0.9444,0.5231
-platform_d,10,18.956,17.258,24.432,2.315,205.34,60,18,42,0,0.3,1.0,0.4615
+mode,runs,mean_time_ms,min_time_ms,max_time_ms,stdev_time_ms,peak_memory_kb,files_discovered,files_scanned,files_failed,files_skipped,coverage_status,total_detected,true_positives,false_positives,false_negatives,precision,recall,f1_score
+regex_only,10,11.763,10.135,16.697,1.915,202.03,7,7,0,0,verified,49,11,38,7,0.2245,0.6111,0.3284
+ast_enriched,10,19.712,17.686,21.919,1.299,227.99,7,7,0,0,verified,55,16,39,2,0.2909,0.8889,0.4384
+platform_b,10,19.595,17.722,20.814,1.02,224.01,7,7,0,0,verified,55,16,39,2,0.2909,0.8889,0.4384
+platform_d,10,17.598,15.867,20.886,1.696,216.7,7,7,0,0,verified,49,16,33,2,0.3265,0.8889,0.4776

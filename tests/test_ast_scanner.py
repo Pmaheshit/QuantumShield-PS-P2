@@ -168,6 +168,71 @@ cipher = AES.new(b"0123456789abcdef0123456789abcdef", AES.MODE_GCM)
         assert findings[0].assumed_default is False
         assert findings[0].to_dict()["assumed_default"] is False
 
+    def test_conservative_aes_default_is_disabled(self):
+        import src.scanner.ast_scanner as ast_scanner_module
+
+        assert ast_scanner_module.CONSERVATIVE_AES_DEFAULT is False
+
+    @pytest.mark.parametrize(
+        "key_expression",
+        [
+            "key_from_kms",
+            "load_key()",
+            "settings.encryption_key",
+        ],
+    )
+    def test_dynamic_aes_key_sources_remain_unresolved(
+        self, ast_scanner: PythonAstScanner, key_expression: str
+    ):
+        findings = ast_scanner.scan_source(
+            f"from Crypto.Cipher import AES\ncipher = AES.new({key_expression}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+
+    @pytest.mark.parametrize(
+        "key_expression",
+        [
+            'make_key(16)',
+            'key_factory(size=16)',
+            '"0123456789abcdef"',
+        ],
+    )
+    def test_unverified_key_expressions_do_not_confirm_aes_size(
+        self, ast_scanner: PythonAstScanner, key_expression: str
+    ):
+        findings = ast_scanner.scan_source(
+            f"from Crypto.Cipher import AES\ncipher = AES.new({key_expression}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+
+    @pytest.mark.parametrize(
+        ("imports", "key_expression", "expected_size"),
+        [
+            ("import os\n", "os.urandom(24)", 192),
+            ("from Crypto.Random import get_random_bytes\n", "get_random_bytes(32)", 256),
+        ],
+    )
+    def test_known_random_byte_apis_confirm_requested_key_size(
+        self, ast_scanner: PythonAstScanner, imports, key_expression, expected_size
+    ):
+        findings = ast_scanner.scan_source(
+            f"{imports}from Crypto.Cipher import AES\n"
+            f"cipher = AES.new({key_expression}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == f"AES-{expected_size}"
+        assert findings[0].key_size == expected_size
+        assert findings[0].confidence == "CONFIRMED"
+
     def test_conservative_aes_default_is_explicitly_marked(
         self, ast_scanner: PythonAstScanner, monkeypatch
     ):

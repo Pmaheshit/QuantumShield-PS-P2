@@ -28,6 +28,7 @@ import json
 import re
 import sys
 import tokenize
+from bisect import bisect_right
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterator, List, Optional
@@ -92,21 +93,18 @@ _PYTHON_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Key length 128 bits = 16 bytes
     (re.compile(r"(AES[_\-]128\b)", re.IGNORECASE), "AES-128"),
     (re.compile(r"get_random_bytes\s*\(\s*16\s*\)", re.IGNORECASE), "AES-128"),
-    (re.compile(r"AES\.new\s*\([^,]+,\s*AES\.[A-Z_]+,\s*(?:key\s*=\s*)?(?:b['\"][^'\"]{16}['\"]|\w{1,20})\s*\)",
-                re.IGNORECASE), "AES-128"),
+    (re.compile(r"(AES\s*\.\s*new)\s*\(", re.IGNORECASE), "AES-UNKNOWN"),
 
     # ── AES-256 ──────────────────────────────────────────────────────────────
     (re.compile(r"(AES[_\-]256\b)", re.IGNORECASE), "AES-256"),
     (re.compile(r"get_random_bytes\s*\(\s*32\s*\)", re.IGNORECASE), "AES-256"),
 
-    # ── Generic AES (unknown key length → classify conservatively as AES-128) ─
-    (re.compile(r"\bfrom\s+Crypto\.Cipher\s+import\s+(AES)\b"), "AES-128"),
-    (re.compile(r"\bfrom\s+cryptography\.hazmat\.primitives\.ciphers(?:\s*import\s*|\s+algorithms\s+import\s+)(AES)\b",
-                re.IGNORECASE), "AES-128"),
-
     # ── SHA-256 ──────────────────────────────────────────────────────────────
     (re.compile(r"(hashlib\.sha256\s*\()"), "SHA-256"),
-    (re.compile(r"(hashlib\.new\s*\(\s*['\"]sha256['\"])", re.IGNORECASE), "SHA-256"),
+    (re.compile(
+        r"(hashlib\s*\.\s*new\s*\(\s*['\"]sha256['\"])",
+        re.IGNORECASE,
+    ), "SHA-256"),
     (re.compile(r"(SHA256\b)"), "SHA-256"),
     (re.compile(r"(from\s+Crypto\.Hash\s+import\s+SHA256)"), "SHA-256"),
     (re.compile(r"(SHA[_\-]256\b)", re.IGNORECASE), "SHA-256"),
@@ -133,10 +131,11 @@ _JAVA_PATTERNS: list[tuple[re.Pattern, str]] = [
     # ── AES-256 ──────────────────────────────────────────────────────────────
     (re.compile(r'(AES[_/\-]256)', re.IGNORECASE), "AES-256"),
     (re.compile(r'keyGenerator\.init\s*\(\s*(256)\s*\)', re.IGNORECASE), "AES-256"),
+    (re.compile(r'keyGenerator\.init\s*\(\s*(192)\s*\)', re.IGNORECASE), "AES-192"),
 
     # ── AES generic ──────────────────────────────────────────────────────────
-    (re.compile(r'Cipher\.getInstance\s*\(\s*"(AES)', re.IGNORECASE), "AES-128"),
-    (re.compile(r'KeyGenerator\.getInstance\s*\(\s*"(AES)"', re.IGNORECASE), "AES-128"),
+    (re.compile(r'Cipher\.getInstance\s*\(\s*"(AES)', re.IGNORECASE), "AES-UNKNOWN"),
+    (re.compile(r'KeyGenerator\.getInstance\s*\(\s*"(AES)"', re.IGNORECASE), "AES-UNKNOWN"),
 
     # ── SHA-256 ──────────────────────────────────────────────────────────────
     (re.compile(r'MessageDigest\.getInstance\s*\(\s*"(SHA-256)"', re.IGNORECASE), "SHA-256"),
@@ -167,8 +166,13 @@ _C_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b(AES_256)\b", re.IGNORECASE), "AES-256"),
     (re.compile(r"\b(AES_set_encrypt_key|AES_set_decrypt_key)\s*\([^,]+,\s*256\s*,"), "AES-256"),
 
+    # ── AES-192 ──────────────────────────────────────────────────────────────
+    (re.compile(r"\b(EVP_aes_192_(?:cbc|ecb|gcm|ctr|cfb|ofb))\b", re.IGNORECASE), "AES-192"),
+    (re.compile(r"\b(AES_192)\b", re.IGNORECASE), "AES-192"),
+    (re.compile(r"\b(AES_set_encrypt_key|AES_set_decrypt_key)\s*\([^,]+,\s*192\s*,"), "AES-192"),
+
     # ── AES generic ──────────────────────────────────────────────────────────
-    (re.compile(r"\b(AES_encrypt|AES_decrypt)\b"), "AES-128"),
+    (re.compile(r"\b(AES_encrypt|AES_decrypt)\b"), "AES-UNKNOWN"),
 
     # ── SHA-256 ──────────────────────────────────────────────────────────────
     (re.compile(r"\b(SHA256(?:_Init|_Update|_Final)?)\b"), "SHA-256"),
@@ -186,6 +190,14 @@ _LANGUAGE_CONFIG: dict[str, tuple[frozenset[str], list[tuple[re.Pattern, str]]]]
 
 def _mask_python_comments_and_strings(source: str) -> str:
     """Mask comments and non-API strings without changing source positions."""
+    masked, _, _ = _mask_python_comments_and_strings_with_status(source)
+    return masked
+
+
+def _mask_python_comments_and_strings_with_status(
+    source: str,
+) -> tuple[str, str, dict[int, int]]:
+    """Mask source and report parse/tokenization limitations to the scanner."""
     lines = source.splitlines(keepends=True)
     line_starts: list[int] = []
     offset = 0
@@ -194,6 +206,19 @@ def _mask_python_comments_and_strings(source: str) -> str:
         offset += len(line)
 
     masked = list(source)
+    preserved_ranges: list[tuple[int, int]] = []
+    aes_key_sizes: dict[int, int] = {}
+    errors: list[str] = []
+
+    def ast_position_offset(position: tuple[int, int]) -> int:
+        row, byte_column = position
+        if row < 1 or row > len(line_starts):
+            return len(source)
+        line = lines[row - 1]
+        character_column = len(
+            line.encode("utf-8")[:byte_column].decode("utf-8")
+        )
+        return line_starts[row - 1] + character_column
 
     def position_offset(position: tuple[int, int]) -> int:
         row, column = position
@@ -206,6 +231,50 @@ def _mask_python_comments_and_strings(source: str) -> str:
             if masked[index] not in "\r\n":
                 masked[index] = " "
 
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        tree = None
+        errors.append(f"SyntaxError at line {exc.lineno}: {exc.msg}")
+
+    if tree is not None:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            receiver = node.func.value
+            if not isinstance(receiver, ast.Name) or not node.args:
+                continue
+
+            argument = node.args[0]
+            if not isinstance(argument, ast.Constant):
+                continue
+
+            if (
+                receiver.id == "hashlib"
+                and node.func.attr == "new"
+                and isinstance(argument.value, str)
+                and argument.value.lower() == "sha256"
+            ):
+                preserved_ranges.append((
+                    ast_position_offset((argument.lineno, argument.col_offset)),
+                    ast_position_offset((argument.end_lineno, argument.end_col_offset)),
+                ))
+            elif (
+                receiver.id == "AES"
+                and node.func.attr == "new"
+                and isinstance(argument.value, bytes)
+            ):
+                key_size = len(argument.value)
+                if key_size in (16, 24, 32):
+                    preserved_ranges.append((
+                        ast_position_offset((argument.lineno, argument.col_offset)),
+                        ast_position_offset((argument.end_lineno, argument.end_col_offset)),
+                    ))
+                    aes_key_sizes[ast_position_offset((
+                        node.func.lineno,
+                        node.func.col_offset,
+                    ))] = key_size
+
     tokens = tokenize.generate_tokens(io.StringIO(source).readline)
     while True:
         try:
@@ -213,37 +282,27 @@ def _mask_python_comments_and_strings(source: str) -> str:
         except StopIteration:
             break
         except (IndentationError, tokenize.TokenError) as exc:
-            position = (
-                exc.args[1]
-                if isinstance(exc, tokenize.TokenError)
-                else (exc.lineno or 1, exc.offset or 0)
-            )
+            if isinstance(exc, tokenize.TokenError):
+                position = exc.args[1]
+                errors.append(f"Tokenization error: {exc.args[0]}")
+            else:
+                position = (exc.lineno or 1, max((exc.offset or 1) - 1, 0))
+                errors.append(f"Tokenization error: {exc.msg}")
             mask_range(position_offset(position), len(source))
             break
 
         if token.type == tokenize.COMMENT:
             mask_range(position_offset(token.start), position_offset(token.end))
         elif token.type == tokenize.STRING:
-            line_prefix = lines[token.start[0] - 1][:token.start[1]]
-            try:
-                literal = ast.literal_eval(token.string)
-            except (SyntaxError, ValueError):
-                literal = None
-
-            is_hashlib_algorithm = (
-                isinstance(literal, str)
-                and literal.lower() == "sha256"
-                and re.search(r"\bhashlib\.new\s*\(\s*$", line_prefix, re.IGNORECASE)
-            )
-            is_aes_key = (
-                isinstance(literal, bytes)
-                and len(literal) == 16
-                and re.search(r"\bAES\.new\s*\([^)]*$", line_prefix, re.IGNORECASE)
-            )
-            if not (is_hashlib_algorithm or is_aes_key):
+            token_start = position_offset(token.start)
+            token_end = position_offset(token.end)
+            if not any(
+                start <= token_start and token_end <= end
+                for start, end in preserved_ranges
+            ):
                 mask_range(position_offset(token.start), position_offset(token.end))
 
-    return "".join(masked)
+    return "".join(masked), "; ".join(errors), aes_key_sizes
 
 
 # Directories to skip (venvs, package installs, build outputs)
@@ -383,37 +442,69 @@ class RegexScanner:
         findings: list[Finding] = []
         seen: set[tuple[int, str]] = set()  # deduplicate same line + algorithm
 
-        scan_source = (
-            _mask_python_comments_and_strings(source)
-            if language == "python"
-            else source
-        )
-        lines = scan_source.splitlines()
         evidence_lines = source.splitlines()
-        for line_no, line in enumerate(lines, start=1):
-            for pattern, algorithm in patterns:
-                m = pattern.search(line)
-                if not m:
-                    continue
-                matched_api = m.group(1) if m.lastindex and m.lastindex >= 1 else m.group(0)
-                key = (line_no, algorithm)
-                if key in seen:
-                    continue
-                seen.add(key)
+        masking_error = ""
+        aes_key_sizes: dict[int, int] = {}
+        if language == "python":
+            scan_source, masking_error, aes_key_sizes = (
+                _mask_python_comments_and_strings_with_status(source)
+            )
+            scan_source = re.sub(r"\\(?=\r?\n)", " ", scan_source)
+            line_starts = [0]
+            line_starts.extend(
+                index + 1
+                for index, character in enumerate(scan_source)
+                if character == "\n"
+            )
+            matches = sorted(
+                (
+                    match.start(1) if match.lastindex else match.start(),
+                    pattern_index,
+                    match,
+                    algorithm,
+                )
+                for pattern_index, (pattern, algorithm) in enumerate(patterns)
+                for match in pattern.finditer(scan_source)
+            )
+            match_entries = (
+                (bisect_right(line_starts, match_start), match, algorithm)
+                for match_start, _, match, algorithm in matches
+            )
+        else:
+            scan_source = source
+            match_entries = (
+                (line_no, match, algorithm)
+                for line_no, line in enumerate(scan_source.splitlines(), start=1)
+                for pattern, algorithm in patterns
+                if (match := pattern.search(line))
+            )
 
-                risk = self._classifier.classify(algorithm)
-                findings.append(Finding(
-                    file_path=relative_path,
-                    line_number=line_no,
-                    language=language,
-                    matched_api=matched_api,
-                    algorithm=algorithm,
-                    risk_level=risk.level,
-                    replacement=risk.replacement,
-                    evidence=evidence_lines[line_no - 1].strip(),
-                    detection_method="regex",
-                ))
+        for line_no, m, algorithm in match_entries:
+            matched_api = m.group(1) if m.lastindex and m.lastindex >= 1 else m.group(0)
+            if language == "python" and matched_api.replace(" ", "").casefold() == "aes.new":
+                key_size = aes_key_sizes.get(m.start(1) if m.lastindex else m.start())
+                if key_size in (16, 24, 32):
+                    algorithm = f"AES-{key_size * 8}"
+            key = (line_no, algorithm)
+            if key in seen:
+                continue
+            seen.add(key)
 
+            risk = self._classifier.classify(algorithm)
+            findings.append(Finding(
+                file_path=relative_path,
+                line_number=line_no,
+                language=language,
+                matched_api=matched_api,
+                algorithm=algorithm,
+                risk_level=risk.level,
+                replacement=risk.replacement,
+                evidence=evidence_lines[line_no - 1].strip(),
+                detection_method="regex",
+            ))
+
+        if masking_error:
+            return findings, FileScanOutcome(relative_path, "failed", masking_error)
         return findings, FileScanOutcome(relative_path, "scanned")
 
     @staticmethod
