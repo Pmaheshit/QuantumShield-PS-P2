@@ -29,7 +29,13 @@ from pathlib import Path
 from src.benchmark.runner import BenchmarkHarness
 from src.platforms.platform_config import export_platform_definitions
 from src.reporting.inventory_report import InventoryReportGenerator
+from src.scanner.scan_result import ScanResult
 from src.scanner.unified_scanner import UnifiedScanner
+
+
+def _inventory_file_counts(scan_result: ScanResult) -> dict[str, int]:
+    """Validate and count the scanner's final per-file outcomes."""
+    return scan_result.file_counts()
 
 
 def run_full_pipeline(
@@ -64,13 +70,21 @@ def run_full_pipeline(
     # Step 2: Multi-Language Cryptographic Scan
     print("[2/4] Executing AST-enriched multi-language cryptographic scan...")
     scanner = UnifiedScanner(root=scan_path, use_ast_for_python=True)
-    findings = scanner.scan()
+    scan_result = scanner.scan_with_outcomes()
+    findings = scan_result.findings
     print(f"      Detected {len(findings)} cryptographic findings across target repository.")
 
     # Step 3: Generate Inventory Reports
     print("[3/4] Generating structured inventory reports...")
-    total_files = len(list(scanner._iter_source_files()))
-    rep_gen = InventoryReportGenerator(findings, scanned_root=str(scan_path), total_files_scanned=total_files)
+    file_counts = _inventory_file_counts(scan_result)
+    rep_gen = InventoryReportGenerator(
+        findings,
+        scanned_root=str(scan_path),
+        total_files_scanned=file_counts["files_scanned"],
+        files_discovered=file_counts["files_discovered"],
+        files_failed=file_counts["files_failed"],
+        files_skipped=file_counts["files_skipped"],
+    )
 
     json_report = rep_gen.generate_json()
     md_report = rep_gen.generate_markdown()

@@ -54,9 +54,12 @@ class Finding:
     replacement: str        # recommended PQC replacement
     evidence: str           # full source line (stripped) for human review
     detection_method: str = "regex"
+    _source_column: Optional[int] = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        data.pop("_source_column", None)
+        return data
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -440,7 +443,7 @@ class RegexScanner:
 
         _, patterns = _LANGUAGE_CONFIG[language]
         findings: list[Finding] = []
-        seen: set[tuple[int, str]] = set()  # deduplicate same line + algorithm
+        seen: set[tuple[int, int, str]] = set()
 
         evidence_lines = source.splitlines()
         masking_error = ""
@@ -467,25 +470,49 @@ class RegexScanner:
                 for match in pattern.finditer(scan_source)
             )
             match_entries = (
-                (bisect_right(line_starts, match_start), match, algorithm)
+                (
+                    bisect_right(line_starts, match_start),
+                    match_start - line_starts[bisect_right(line_starts, match_start) - 1],
+                    match,
+                    algorithm,
+                )
                 for match_start, _, match, algorithm in matches
             )
         else:
             scan_source = source
             match_entries = (
-                (line_no, match, algorithm)
+                (
+                    line_no,
+                    match.start(1) if match.lastindex else match.start(),
+                    match,
+                    algorithm,
+                )
                 for line_no, line in enumerate(scan_source.splitlines(), start=1)
                 for pattern, algorithm in patterns
                 if (match := pattern.search(line))
             )
 
-        for line_no, m, algorithm in match_entries:
+        for line_no, source_column, m, algorithm in match_entries:
             matched_api = m.group(1) if m.lastindex and m.lastindex >= 1 else m.group(0)
             if language == "python" and matched_api.replace(" ", "").casefold() == "aes.new":
                 key_size = aes_key_sizes.get(m.start(1) if m.lastindex else m.start())
                 if key_size in (16, 24, 32):
                     algorithm = f"AES-{key_size * 8}"
-            key = (line_no, algorithm)
+            call_offset = (
+                line_starts[line_no - 1] + source_column
+                if language == "python"
+                else None
+            )
+            is_call = language == "python" and (
+                "(" in matched_api
+                or (
+                    call_offset is not None
+                    and scan_source[call_offset + len(matched_api):]
+                    .lstrip()
+                    .startswith("(")
+                )
+            )
+            key = (line_no, source_column if is_call else 0, algorithm)
             if key in seen:
                 continue
             seen.add(key)
@@ -501,6 +528,7 @@ class RegexScanner:
                 replacement=risk.replacement,
                 evidence=evidence_lines[line_no - 1].strip(),
                 detection_method="regex",
+                _source_column=source_column,
             ))
 
         if masking_error:
@@ -566,10 +594,11 @@ def _build_cli() -> None:
     if args.ast:
         from .unified_scanner import UnifiedScanner
         scanner = UnifiedScanner(root=args.path, use_ast_for_python=True)
-        findings = scanner.scan()
+        scan_result = scanner.scan_with_outcomes()
     else:
         scanner = RegexScanner(root=args.path)
-        findings = scanner.scan()
+        scan_result = scanner.scan_with_outcomes()
+    findings = scan_result.findings
 
     if args.pretty or args.format == "table":
         _print_table(findings)
@@ -577,13 +606,27 @@ def _build_cli() -> None:
 
     if args.format == "markdown":
         from ..reporting.inventory_report import InventoryReportGenerator
-        total_files = len(list(scanner._iter_source_files())) if hasattr(scanner, "_iter_source_files") else len(findings)
-        gen = InventoryReportGenerator(findings, scanned_root=args.path, total_files_scanned=total_files)
+        file_counts = scan_result.file_counts()
+        gen = InventoryReportGenerator(
+            findings,
+            scanned_root=args.path,
+            total_files_scanned=file_counts["files_scanned"],
+            files_discovered=file_counts["files_discovered"],
+            files_failed=file_counts["files_failed"],
+            files_skipped=file_counts["files_skipped"],
+        )
         output_text = gen.generate_markdown()
     elif args.format == "report":
         from ..reporting.inventory_report import InventoryReportGenerator
-        total_files = len(list(scanner._iter_source_files())) if hasattr(scanner, "_iter_source_files") else len(findings)
-        gen = InventoryReportGenerator(findings, scanned_root=args.path, total_files_scanned=total_files)
+        file_counts = scan_result.file_counts()
+        gen = InventoryReportGenerator(
+            findings,
+            scanned_root=args.path,
+            total_files_scanned=file_counts["files_scanned"],
+            files_discovered=file_counts["files_discovered"],
+            files_failed=file_counts["files_failed"],
+            files_skipped=file_counts["files_skipped"],
+        )
         output_text = gen.generate_json()
     else:
         # Default raw JSON findings list

@@ -347,17 +347,55 @@ class TestGroundTruthFiltering:
         expected = _filter_ground_truth_for_dir(gt, tmp_path)
         file_names = {e.file_name for e in expected}
         assert file_names == {"snippet_rsa.py"}
+        assert expected == gt["snippet_rsa.py"]
 
-    def test_duplicate_basename_in_subdir_included(self, tmp_path):
-        """snippet_rsa.py in a subdirectory is matched by basename and included."""
+    def test_unrelated_subdir_file_with_fixture_basename_is_not_labeled(self, tmp_path):
+        """A basename match alone does not transfer fixture labels."""
         subdir = tmp_path / "subdir"
         subdir.mkdir()
-        shutil.copy(FIXTURES_DIR / "snippet_rsa.py", subdir / "snippet_rsa.py")
+        (subdir / "snippet_rsa.py").write_text("pass\n", encoding="utf-8")
 
         gt = get_all_ground_truth()
         expected = _filter_ground_truth_for_dir(gt, tmp_path)
-        file_basenames = {Path(e.file_name).name for e in expected}
-        assert "snippet_rsa.py" in file_basenames
+        assert expected == []
+
+    def test_unrelated_root_file_with_fixture_basename_is_not_labeled(self, tmp_path):
+        (tmp_path / "snippet_rsa.py").write_text("pass\n", encoding="utf-8")
+
+        expected = _filter_ground_truth_for_dir(get_all_ground_truth(), tmp_path)
+
+        assert expected == []
+
+    def test_duplicate_nested_basenames_do_not_both_inherit_root_fixture_labels(
+        self, tmp_path
+    ):
+        for directory in ("module_a", "module_b"):
+            nested = tmp_path / directory
+            nested.mkdir()
+            shutil.copy(FIXTURES_DIR / "snippet_rsa.py", nested / "snippet_rsa.py")
+
+        expected = _filter_ground_truth_for_dir(get_all_ground_truth(), tmp_path)
+
+        assert expected == []
+
+    def test_nested_relative_path_association_is_exact(self, tmp_path):
+        module_a = tmp_path / "module_a"
+        module_b = tmp_path / "module_b"
+        module_a.mkdir()
+        module_b.mkdir()
+        (module_a / "snippet_rsa.py").write_text("pass\n", encoding="utf-8")
+        shutil.copy(FIXTURES_DIR / "snippet_rsa.py", module_b / "snippet_rsa.py")
+        ground_truth = {
+            "module_a/snippet_rsa.py": [
+                ExpectedFinding("module_a/snippet_rsa.py", 1, "RSA", "HIGH", True)
+            ]
+        }
+
+        expected = _filter_ground_truth_for_dir(ground_truth, tmp_path)
+
+        assert [(finding.file_name, finding.line_number) for finding in expected] == [
+            ("module_a/snippet_rsa.py", 1)
+        ]
 
     def test_duplicate_filenames_in_multiple_subdirs_evaluated_correctly(self, tmp_path):
         """When the same fixture filename exists in two subdirs, both are evaluated."""
@@ -369,14 +407,20 @@ class TestGroundTruthFiltering:
         shutil.copy(FIXTURES_DIR / "snippet_rsa.py", sub2 / "snippet_rsa.py")
 
         gt = get_all_ground_truth()
-        expected = _filter_ground_truth_for_dir(gt, tmp_path)
         expected_per_file = len(gt["snippet_rsa.py"])
+        explicit_gt = {
+            "sub1/snippet_rsa.py": gt["snippet_rsa.py"],
+            "sub2/snippet_rsa.py": gt["snippet_rsa.py"],
+        }
+        expected = _filter_ground_truth_for_dir(explicit_gt, tmp_path)
         assert len(expected) == expected_per_file * 2
         file_names = {e.file_name for e in expected}
         assert file_names == {"sub1/snippet_rsa.py", "sub2/snippet_rsa.py"}
 
         # Now run benchmark harness on this duplicate directory
-        harness = BenchmarkHarness(target_dir=tmp_path, runs=1)
+        harness = BenchmarkHarness(
+            target_dir=tmp_path, ground_truth=explicit_gt, runs=1
+        )
         results = harness.run_benchmark(include_platform_b=False, include_platform_d=False)
         ast_acc = results["results"]["ast_enriched"]["accuracy"]
         assert ast_acc["total_expected"] == expected_per_file * 2

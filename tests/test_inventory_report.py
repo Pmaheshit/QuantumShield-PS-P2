@@ -63,6 +63,42 @@ def sample_findings() -> list[Finding]:
 
 
 class TestInventoryReportGenerator:
+    def test_file_outcome_counts_are_explicit_and_backward_compatible(
+        self, sample_findings
+    ):
+        generator = InventoryReportGenerator(
+            sample_findings,
+            scanned_root="test_repo",
+            total_files_scanned=2,
+            files_discovered=4,
+            files_failed=1,
+            files_skipped=1,
+        )
+
+        metadata = generator.generate_json_dict()["metadata"]
+        assert metadata["total_files_scanned"] == 2
+        assert metadata["files_discovered"] == 4
+        assert metadata["files_failed"] == 1
+        assert metadata["files_skipped"] == 1
+
+        legacy_metadata = InventoryReportGenerator(
+            sample_findings, total_files_scanned=3
+        ).generate_json_dict()["metadata"]
+        assert legacy_metadata["total_files_scanned"] == 3
+        assert legacy_metadata["files_discovered"] == 3
+        assert legacy_metadata["files_failed"] == 0
+        assert legacy_metadata["files_skipped"] == 0
+
+    def test_inconsistent_file_counts_are_rejected(self):
+        with pytest.raises(ValueError, match="account for every discovered file"):
+            InventoryReportGenerator(
+                [],
+                total_files_scanned=2,
+                files_discovered=3,
+                files_failed=0,
+                files_skipped=0,
+            )
+
     def test_json_structure_and_keys(self, sample_findings):
         gen = InventoryReportGenerator(sample_findings, scanned_root="test_repo", total_files_scanned=10)
         json_data = gen.generate_json_dict()

@@ -105,9 +105,50 @@ key = ec.generate_private_key(ec.SECP384R1())
 '''
         findings = ast_scanner.scan_source(code)
         assert len(findings) == 1
-        assert findings[0].algorithm == "ECDSA"
+        assert findings[0].algorithm == "ECC"
+        assert findings[0].risk_level == RiskLevel.HIGH
         assert findings[0].curve == "SECP384R1"
         assert findings[0].confidence == "CONFIRMED"
+
+    def test_ec_key_generation_does_not_assume_signing_or_key_agreement(
+        self, ast_scanner: PythonAstScanner
+    ):
+        code = """
+from cryptography.hazmat.primitives.asymmetric import ec
+private_key = ec.generate_private_key(ec.SECP256R1())
+"""
+        findings = ast_scanner.scan_source(code)
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "ECC"
+        assert findings[0].risk_level == RiskLevel.HIGH
+        assert findings[0].matched_api == "ec.generate_private_key"
+
+    def test_pycryptodome_ecc_generation_is_generic_ecc(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            'from Crypto.PublicKey import ECC\nkey = ECC.generate(curve="P-256")\n'
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "ECC"
+        assert findings[0].risk_level == RiskLevel.HIGH
+        assert findings[0].matched_api == "ECC.generate"
+
+    def test_explicit_ecdsa_and_ecdh_operations_keep_specific_labels(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from cryptography.hazmat.primitives.asymmetric import ec\n"
+            "signature = private_key.sign(message, ec.ECDSA(hash_algorithm))\n"
+            "shared_key = private_key.exchange(ec.ECDH(), peer_public_key)\n"
+        )
+
+        assert [(finding.algorithm, finding.risk_level) for finding in findings] == [
+            ("ECDSA", RiskLevel.HIGH),
+            ("ECDH", RiskLevel.HIGH),
+        ]
 
     def test_aes_bytes_key_size_deduced(self, ast_scanner: PythonAstScanner):
         code = '''

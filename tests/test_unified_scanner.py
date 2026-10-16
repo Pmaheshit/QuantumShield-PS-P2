@@ -11,6 +11,7 @@ Verifies:
 from pathlib import Path
 import pytest
 
+from src.scanner.regex_scanner import Finding
 from src.scanner.unified_scanner import UnifiedScanner
 from src.scanner.risk_classifier import RiskLevel
 
@@ -94,6 +95,127 @@ class TestUnifiedScanner:
 
         assert len(call_findings) == 1
         assert call_findings[0].detection_method == "ast"
+
+    @pytest.mark.parametrize(
+        ("key", "algorithm", "key_size"),
+        [
+            ('b"0123456789abcdef"', "AES-128", 128),
+            ('b"0123456789abcdef01234567"', "AES-192", 192),
+            ('b"0123456789abcdef0123456789abcdef"', "AES-256", 256),
+        ],
+    )
+    def test_ast_aes_variant_replaces_less_specific_regex_finding(
+        self, tmp_path, monkeypatch, key, algorithm, key_size
+    ):
+        source = (
+            "from Crypto.Cipher import AES\n"
+            f"cipher = AES.new({key}, AES.MODE_ECB)\n"
+        )
+        file_path = tmp_path / "example.py"
+        file_path.write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+        scan_regex = scanner.regex_scanner._scan_file_with_outcome
+
+        def regex_with_unknown_aes(path, language):
+            findings, outcome = scan_regex(path, language)
+            for finding in findings:
+                if finding.matched_api.replace(" ", "").casefold() == "aes.new":
+                    finding.algorithm = "AES-UNKNOWN"
+                    finding.risk_level = RiskLevel.UNKNOWN
+            return findings, outcome
+
+        monkeypatch.setattr(
+            scanner.regex_scanner, "_scan_file_with_outcome", regex_with_unknown_aes
+        )
+
+        findings = scanner.scan()
+        aes_findings = [finding for finding in findings if finding.matched_api == "AES.new"]
+
+        assert len(aes_findings) == 1
+        assert aes_findings[0].algorithm == algorithm
+        assert aes_findings[0].key_size == key_size
+        assert aes_findings[0].detection_method == "ast"
+
+    def test_two_aes_calls_on_one_line_are_not_merged(self, tmp_path):
+        source = (
+            "from Crypto.Cipher import AES\n"
+            'c1 = AES.new(b"0123456789abcdef", AES.MODE_ECB); '
+            'c2 = AES.new(b"fedcba9876543210", AES.MODE_ECB)\n'
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        regex_findings = scanner.regex_scanner._scan_file(
+            tmp_path / "example.py", "python"
+        )
+        findings = [
+            finding
+            for finding in scanner.scan()
+            if finding.matched_api == "AES.new"
+        ]
+
+        assert len(
+            [
+                finding
+                for finding in regex_findings
+                if finding.matched_api.replace(" ", "").casefold() == "aes.new"
+            ]
+        ) == 2
+        assert [(finding.algorithm, finding.detection_method) for finding in findings] == [
+            ("AES-128", "ast"),
+            ("AES-128", "ast"),
+        ]
+
+    def test_aes_calls_on_different_lines_are_not_merged(self, tmp_path):
+        source = (
+            "from Crypto.Cipher import AES\n"
+            'c1 = AES.new(b"0123456789abcdef", AES.MODE_ECB)\n'
+            'c2 = AES.new(b"0123456789abcdef", AES.MODE_ECB)\n'
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = [
+            finding
+            for finding in scanner.scan()
+            if finding.matched_api == "AES.new"
+        ]
+
+        assert [(finding.line_number, finding.detection_method) for finding in findings] == [
+            (2, "ast"),
+            (3, "ast"),
+        ]
+
+    def test_ast_aes_does_not_suppress_unrelated_regex_finding(self, tmp_path):
+        source = (
+            "from Crypto.Cipher import AES\n"
+            'key = get_random_bytes(16); cipher = AES.new(b"0123456789abcdef", AES.MODE_ECB)\n'
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+
+        assert len(findings) == 2
+        assert any(
+            finding.detection_method == "regex"
+            and "get_random_bytes" in finding.matched_api
+            for finding in findings
+        )
+        assert any(
+            finding.algorithm == "AES-128"
+            and finding.matched_api == "AES.new"
+            and finding.detection_method == "ast"
+            for finding in findings
+        )
+
+    def test_source_column_is_internal_to_finding_schema(self):
+        finding = Finding(
+            "example.py", 1, "python", "AES.new", "AES-128", "MODERATE", "rep",
+            "cipher = AES.new(key)", _source_column=10,
+        )
+
+        assert "_source_column" not in finding.to_dict()
 
     def test_multiline_api_call_is_retained_once(self, tmp_path):
         source = (

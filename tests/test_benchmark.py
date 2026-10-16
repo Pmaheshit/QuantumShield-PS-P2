@@ -536,7 +536,13 @@ class TestBenchmarkExecutionAndExports:
         from src.benchmark.ground_truth import MOCK_FIXTURE_GROUND_TRUTH
         rsa_count = len(MOCK_FIXTURE_GROUND_TRUTH["snippet_rsa.py"])
 
-        harness = BenchmarkHarness(target_dir=tmp_path, runs=1)
+        explicit_gt = {
+            "module_a/snippet_rsa.py": MOCK_FIXTURE_GROUND_TRUTH["snippet_rsa.py"],
+            "module_b/snippet_rsa.py": MOCK_FIXTURE_GROUND_TRUTH["snippet_rsa.py"],
+        }
+        harness = BenchmarkHarness(
+            target_dir=tmp_path, ground_truth=explicit_gt, runs=1
+        )
         results = harness.run_benchmark(include_platform_b=False, include_platform_d=False)
 
         ast_acc = results["results"]["ast_enriched"]["accuracy"]

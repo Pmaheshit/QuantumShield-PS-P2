@@ -56,10 +56,40 @@ class InventoryReportGenerator:
         "AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed.",
     ]
 
-    def __init__(self, findings: Sequence[Finding], scanned_root: str = ".", total_files_scanned: int = 0) -> None:
+    def __init__(
+        self,
+        findings: Sequence[Finding],
+        scanned_root: str = ".",
+        total_files_scanned: int = 0,
+        files_discovered: Optional[int] = None,
+        files_failed: int = 0,
+        files_skipped: int = 0,
+    ) -> None:
         self.findings = list(findings)
         self.scanned_root = scanned_root
         self.total_files_scanned = total_files_scanned
+        self.files_discovered = (
+            files_discovered
+            if files_discovered is not None
+            else total_files_scanned + files_failed + files_skipped
+        )
+        self.files_failed = files_failed
+        self.files_skipped = files_skipped
+        if min(
+            self.total_files_scanned,
+            self.files_discovered,
+            self.files_failed,
+            self.files_skipped,
+        ) < 0:
+            raise ValueError("Inventory file counts cannot be negative.")
+        accounted_files = (
+            self.total_files_scanned + self.files_failed + self.files_skipped
+        )
+        if self.files_discovered != accounted_files:
+            raise ValueError(
+                "Inventory file counts must account for every discovered file "
+                f"({self.files_discovered} discovered, {accounted_files} accounted)."
+            )
         self.timestamp = datetime.now(timezone.utc).isoformat()
         self.classifier = RiskClassifier()
 
@@ -118,6 +148,9 @@ class InventoryReportGenerator:
                 "timestamp_utc": self.timestamp,
                 "scanned_root": self.scanned_root,
                 "total_files_scanned": self.total_files_scanned,
+                "files_discovered": self.files_discovered,
+                "files_failed": self.files_failed,
+                "files_skipped": self.files_skipped,
                 "total_findings": len(self.findings),
             },
             "summary": {
@@ -144,7 +177,10 @@ class InventoryReportGenerator:
         lines.append("")
         lines.append(f"**Generated:** `{meta['timestamp_utc']}`<br>")
         lines.append(f"**Target Directory:** `{meta['scanned_root']}`<br>")
+        lines.append(f"**Files Discovered:** {meta['files_discovered']}<br>")
         lines.append(f"**Files Scanned:** {meta['total_files_scanned']}<br>")
+        lines.append(f"**Files Failed:** {meta['files_failed']}<br>")
+        lines.append(f"**Files Skipped:** {meta['files_skipped']}<br>")
         lines.append(f"**Total Cryptographic Findings:** {meta['total_findings']}")
         lines.append("")
 

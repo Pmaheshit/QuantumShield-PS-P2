@@ -164,13 +164,31 @@ class UnifiedScanner:
 
     @staticmethod
     def _represented_by_ast(finding: Finding, ast_findings: list[AstFinding]) -> bool:
-        api = re.sub(r"[\s(]+$", "", finding.matched_api).casefold()
-        return any(
-            ast_finding.line_number == finding.line_number
-            and ast_finding.algorithm == finding.algorithm
-            and (
-                api in ast_finding.matched_api.casefold()
-                or ast_finding.matched_api.casefold() in api
+        api = re.sub(r"\s+", "", finding.matched_api).rstrip("(").casefold()
+        if finding._source_column is None:
+            return False
+        for ast_finding in ast_findings:
+            ast_api = re.sub(r"\s+", "", ast_finding.matched_api).rstrip("(").casefold()
+            same_invocation = (
+                ast_finding.file_path == finding.file_path
+                and ast_finding.line_number == finding.line_number
+                and ast_finding._source_column == finding._source_column
+                and ast_api == api
             )
-            for ast_finding in ast_findings
-        )
+            if not same_invocation:
+                continue
+
+            same_algorithm = ast_finding.algorithm == finding.algorithm
+            confirmed_aes_variant = (
+                finding.algorithm.startswith("AES-")
+                and ast_finding.algorithm in {"AES-128", "AES-192", "AES-256"}
+                and ast_finding.confidence == "CONFIRMED"
+            )
+            generic_ec_generation = (
+                finding.algorithm == "ECDSA"
+                and ast_finding.algorithm == "ECC"
+                and ast_api in {"ec.generate_private_key", "ecc.generate"}
+            )
+            if same_algorithm or confirmed_aes_variant or generic_ec_generation:
+                return True
+        return False

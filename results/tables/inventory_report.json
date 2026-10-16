@@ -2,31 +2,35 @@
   "metadata": {
     "tool": "QuantumShield PS-P2 Cryptographic Inventory & Migration Planner",
     "version": "1.0.0",
-    "timestamp_utc": "2026-10-16T05:10:31.932869+00:00",
+    "timestamp_utc": "2026-10-16T05:45:12.820568+00:00",
     "scanned_root": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\tests\\fixtures",
     "total_files_scanned": 7,
-    "total_findings": 55
+    "files_discovered": 7,
+    "files_failed": 0,
+    "files_skipped": 0,
+    "total_findings": 62
   },
   "summary": {
     "findings_by_risk": {
-      "HIGH": 28,
+      "HIGH": 32,
       "MODERATE": 5,
-      "LOWER": 17,
+      "LOWER": 20,
       "UNKNOWN": 5
     },
     "findings_by_language": {
       "c": 13,
-      "python": 26,
+      "python": 33,
       "java": 16
     },
     "findings_by_algorithm": {
-      "RSA": 16,
-      "ECDSA": 10,
+      "RSA": 18,
+      "ECDSA": 9,
       "AES-128": 5,
       "AES-256": 4,
-      "SHA-256": 13,
+      "SHA-256": 16,
       "AES-UNKNOWN": 5,
-      "ECDH": 2
+      "ECC": 2,
+      "ECDH": 3
     }
   },
   "findings": [
@@ -299,9 +303,9 @@
       "line_number": 12,
       "language": "python",
       "matched_api": "ec.generate_private_key",
-      "algorithm": "ECDSA",
+      "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "replacement": "ML-KEM (FIPS 203) or ML-DSA (FIPS 204)",
       "evidence": "private_key = ec.generate_private_key(ec.SECP256R1())",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
@@ -366,9 +370,9 @@
       "line_number": 32,
       "language": "python",
       "matched_api": "ECC.generate",
-      "algorithm": "ECDSA",
+      "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "replacement": "ML-KEM (FIPS 203) or ML-DSA (FIPS 204)",
       "evidence": "key = ECC.generate(curve=\"P-256\")",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
@@ -389,6 +393,42 @@
       "risk_level": "HIGH",
       "replacement": "ML-DSA (FIPS 204) for signatures",
       "evidence": "from cryptography.hazmat.primitives.asymmetric import ec",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_ecc.py",
+      "line_number": 18,
+      "language": "python",
+      "matched_api": "ECDSA",
+      "algorithm": "ECDSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "evidence": "return private_key.sign(message, ec.ECDSA(hashes.SHA256()))",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_ecc.py",
+      "line_number": 18,
+      "language": "python",
+      "matched_api": "SHA256",
+      "algorithm": "SHA-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
+      "evidence": "return private_key.sign(message, ec.ECDSA(hashes.SHA256()))",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_ecc.py",
+      "line_number": 23,
+      "language": "python",
+      "matched_api": "ECDH",
+      "algorithm": "ECDH",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (FIPS 203) for key exchange",
+      "evidence": "shared_key = private_key.exchange(ec.ECDH(), peer_public_key)",
       "detection_method": "regex",
       "confidence": "INFERRED"
     },
@@ -779,6 +819,30 @@
     },
     {
       "file_path": "snippet_rsa.py",
+      "line_number": 26,
+      "language": "python",
+      "matched_api": "SHA256",
+      "algorithm": "SHA-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
+      "evidence": "mgf=padding.MGF1(hashes.SHA256()),",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_rsa.py",
+      "line_number": 29,
+      "language": "python",
+      "matched_api": "SHA256",
+      "algorithm": "SHA-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
+      "evidence": "hashes.SHA256(),",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_rsa.py",
       "line_number": 35,
       "language": "python",
       "matched_api": "from Crypto.PublicKey import RSA",
@@ -786,6 +850,30 @@
       "risk_level": "HIGH",
       "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
       "evidence": "from Crypto.PublicKey import RSA as _RSA",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_rsa.py",
+      "line_number": 39,
+      "language": "python",
+      "matched_api": "RSA.generate(",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "key = _RSA.generate(2048)",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    },
+    {
+      "file_path": "snippet_rsa.py",
+      "line_number": 48,
+      "language": "python",
+      "matched_api": "RSA.import_key(",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "return _RSA.import_key(pem_data)",
       "detection_method": "regex",
       "confidence": "INFERRED"
     }

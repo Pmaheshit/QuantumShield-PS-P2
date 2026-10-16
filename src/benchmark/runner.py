@@ -26,6 +26,7 @@ Tracks and reports:
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import platform
@@ -35,6 +36,7 @@ import time
 import tracemalloc
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Dict, List, Optional, Sequence
 
 import psutil
@@ -113,12 +115,22 @@ def _filter_ground_truth_for_dir(
     """
     Return only the expected findings whose fixture file is present in target_dir.
 
-    For each file present under target_dir matching a ground-truth key by basename,
-    its expected findings are included with file_name set to its relative path.
-    If the same fixture filename exists in multiple subdirectories, each scanned
-    instance is included with its relative path so that duplicate filenames across
-    directories are evaluated accurately without spurious false positives or negatives.
+    Ground-truth keys are normalized root-relative paths. Basename-only matches are
+    deliberately not inferred, so unrelated same-named files cannot inherit labels.
     """
+
+    def normalize_relative_path(path: str) -> str:
+        return PurePosixPath(path.replace("\\", "/")).as_posix()
+
+    normalized_ground_truth: dict[str, list[ExpectedFinding]] = {}
+    for path, expected_findings in ground_truth.items():
+        normalized_path = normalize_relative_path(path)
+        if normalized_path in normalized_ground_truth:
+            raise ValueError(
+                f"Ground-truth paths are ambiguous after normalization: {path!r}"
+            )
+        normalized_ground_truth[normalized_path] = expected_findings
+
     if target_dir.is_file():
         files = [target_dir]
     else:
@@ -126,14 +138,31 @@ def _filter_ground_truth_for_dir(
 
     expected: list[ExpectedFinding] = []
     for p in files:
-        basename = p.name
-        if basename in ground_truth:
-            rel = (
-                str(p.relative_to(target_dir)).replace("\\", "/")
-                if target_dir.is_dir()
-                else p.name
-            )
-            for ef in ground_truth[basename]:
+        rel = (
+            normalize_relative_path(str(p.relative_to(target_dir)))
+            if target_dir.is_dir()
+            else normalize_relative_path(p.name)
+        )
+        if rel in normalized_ground_truth:
+            file_ground_truth = normalized_ground_truth[rel]
+            fixture_hashes = {
+                finding.fixture_sha256
+                for finding in file_ground_truth
+                if finding.fixture_sha256 is not None
+            }
+            if fixture_hashes:
+                if len(fixture_hashes) != 1 or any(
+                    finding.fixture_sha256 is None
+                    for finding in file_ground_truth
+                ):
+                    raise ValueError(
+                        f"Ground-truth fixture identity is inconsistent for {rel!r}"
+                    )
+                actual_hash = hashlib.sha256(p.read_bytes()).hexdigest()
+                if actual_hash not in fixture_hashes:
+                    continue
+
+            for ef in file_ground_truth:
                 expected.append(
                     ExpectedFinding(
                         file_name=rel,
@@ -142,6 +171,7 @@ def _filter_ground_truth_for_dir(
                         risk_level=ef.risk_level,
                         is_genuine_call=ef.is_genuine_call,
                         purpose=ef.purpose,
+                        fixture_sha256=ef.fixture_sha256,
                     )
                 )
     return expected

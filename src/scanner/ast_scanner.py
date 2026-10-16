@@ -169,7 +169,16 @@ class _CryptoAstVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         # Check function call
+        findings_before = len(self.findings)
         self._analyze_call(node)
+        if len(self.findings) > findings_before:
+            source_line = self.source_lines[getattr(node, "lineno", 1) - 1]
+            byte_column = getattr(node.func, "col_offset", node.col_offset)
+            char_column = len(
+                source_line.encode("utf-8")[:byte_column].decode("utf-8")
+            )
+            for finding in self.findings[findings_before:]:
+                finding._source_column = char_column
         self.generic_visit(node)
 
     def _resolve_callable_name(self, func_node: ast.AST) -> tuple[str, str]:
@@ -335,13 +344,14 @@ class _CryptoAstVisitor(ast.NodeVisitor):
 
 
         # ── 2. ECC / ECDSA / ECDH ───────────────────────────────────────────
-        # cryptography: ec.generate_private_key(curve, ...)
+        # Key generation alone does not establish whether an EC key is used for
+        # signing or key agreement.
         if (
             (attr == "generate_private_key" and ("ec" in base.lower() or base.endswith(".ec")))
             or full_call.endswith("ec.generate_private_key")
         ):
             curve, confidence = self._extract_ec_curve(node)
-            profile = self.classifier.get_profile("ECDSA")
+            profile = self.classifier.get_profile("ECC")
             details = f"EC key pair generation with curve {curve or 'UNKNOWN'}"
             self.findings.append(
                 AstFinding(
@@ -349,7 +359,7 @@ class _CryptoAstVisitor(ast.NodeVisitor):
                     line_number=lineno,
                     language="python",
                     matched_api="ec.generate_private_key",
-                    algorithm="ECDSA",
+                    algorithm="ECC",
                     risk_level=profile.level,
                     replacement=profile.replacement,
                     evidence=evidence,
@@ -405,14 +415,14 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # PyCryptodome: ECC.generate(curve=...)
         if (attr == "generate" and ("ECC" in base or base.endswith(".ECC"))) or full_call.endswith("ECC.generate"):
             curve, confidence = self._extract_ecc_curve_pycryptodome(node)
-            profile = self.classifier.get_profile("ECDSA")
+            profile = self.classifier.get_profile("ECC")
             self.findings.append(
                 AstFinding(
                     file_path=self.file_path,
                     line_number=lineno,
                     language="python",
                     matched_api="ECC.generate",
-                    algorithm="ECDSA",
+                    algorithm="ECC",
                     risk_level=profile.level,
                     replacement=profile.replacement,
                     evidence=evidence,
