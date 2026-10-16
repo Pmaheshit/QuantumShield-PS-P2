@@ -1,0 +1,5 @@
+mode,runs,mean_time_ms,min_time_ms,max_time_ms,stdev_time_ms,peak_memory_kb,files_discovered,files_scanned,files_failed,files_skipped,coverage_status,total_detected,true_positives,false_positives,false_negatives,precision,recall,f1_score
+regex_only,2,2.171,1.833,2.51,0.479,134.68,1,1,0,0,verified,3,0,3,0,0.0,0.0,0.0
+ast_enriched,2,3.49,3.488,3.492,0.003,139.2,1,1,0,0,verified,3,0,3,0,0.0,0.0,0.0
+platform_b,2,4.798,4.049,5.547,1.059,138.7,1,1,0,0,verified,3,0,3,0,0.0,0.0,0.0
+platform_d,2,5.155,4.76,5.549,0.558,134.83,1,1,0,0,verified,2,0,2,0,0.0,0.0,0.0

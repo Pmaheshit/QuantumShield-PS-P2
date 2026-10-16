@@ -164,18 +164,32 @@ class UnifiedScanner:
 
     @staticmethod
     def _represented_by_ast(finding: Finding, ast_findings: list[AstFinding]) -> bool:
-        api = re.sub(r"\s+", "", finding.matched_api).rstrip("(").casefold()
-        if finding._source_column is None:
+        if finding._source_column is None or finding._source_end_column is None:
             return False
+
+        def api_identity(api: str) -> str:
+            api = re.sub(r"\s+", "", api).split("(", 1)[0].rstrip(".")
+            return api.casefold()
+
+        regex_api = api_identity(finding.matched_api)
         for ast_finding in ast_findings:
-            ast_api = re.sub(r"\s+", "", ast_finding.matched_api).rstrip("(").casefold()
-            same_invocation = (
+            if (
                 ast_finding.file_path == finding.file_path
                 and ast_finding.line_number == finding.line_number
-                and ast_finding._source_column == finding._source_column
-                and ast_api == api
-            )
-            if not same_invocation:
+                and ast_finding._source_column is not None
+                and ast_finding._source_end_column is not None
+            ):
+                ast_api = api_identity(ast_finding.matched_api)
+                api_related = (
+                    ast_api == regex_api
+                    or ast_api.endswith("." + regex_api)
+                    or regex_api.endswith("." + ast_api)
+                )
+                ranges_overlap = (
+                    finding._source_column < ast_finding._source_end_column
+                    and ast_finding._source_column < finding._source_end_column
+                )
+            else:
                 continue
 
             same_algorithm = ast_finding.algorithm == finding.algorithm
@@ -184,11 +198,6 @@ class UnifiedScanner:
                 and ast_finding.algorithm in {"AES-128", "AES-192", "AES-256"}
                 and ast_finding.confidence == "CONFIRMED"
             )
-            generic_ec_generation = (
-                finding.algorithm == "ECDSA"
-                and ast_finding.algorithm == "ECC"
-                and ast_api in {"ec.generate_private_key", "ecc.generate"}
-            )
-            if same_algorithm or confirmed_aes_variant or generic_ec_generation:
+            if api_related and ranges_overlap and (same_algorithm or confirmed_aes_variant):
                 return True
         return False

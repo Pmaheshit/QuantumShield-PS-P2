@@ -286,6 +286,44 @@ cipher = AES.new(b"0123456789abcdef0123456789abcdef", AES.MODE_GCM)
         assert findings[0].key_size == expected_size
         assert findings[0].confidence == "CONFIRMED"
 
+    @pytest.mark.parametrize(
+        ("key_bytes", "expected_size"),
+        [(16, 128), (24, 192), (32, 256)],
+    )
+    def test_local_random_byte_assignment_confirms_aes_key_size(
+        self, ast_scanner: PythonAstScanner, key_bytes: int, expected_size: int
+    ):
+        findings = ast_scanner.scan_source(
+            "from Crypto.Random import get_random_bytes\n"
+            "from Crypto.Cipher import AES\n"
+            "def encrypt():\n"
+            f"    key = get_random_bytes({key_bytes})\n"
+            "    return AES.new(key, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == f"AES-{expected_size}"
+        assert findings[0].key_size == expected_size
+        assert findings[0].confidence == "CONFIRMED"
+
+    def test_reassigned_random_key_is_not_inferred_from_one_assignment(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from Crypto.Random import get_random_bytes\n"
+            "from Crypto.Cipher import AES\n"
+            "def encrypt(change_key):\n"
+            "    key = get_random_bytes(16)\n"
+            "    if change_key:\n"
+            "        key = get_random_bytes(32)\n"
+            "    return AES.new(key, AES.MODE_GCM)\n"
+        )
+
+        aes_findings = [finding for finding in findings if finding.matched_api == "AES.new"]
+        assert len(aes_findings) == 1
+        assert aes_findings[0].algorithm == "AES-UNKNOWN"
+        assert aes_findings[0].key_size is None
+
     def test_conservative_aes_default_is_explicitly_marked(
         self, ast_scanner: PythonAstScanner, monkeypatch
     ):

@@ -1,0 +1,198 @@
+{
+  "metadata": {
+    "benchmark_name": "QuantumShield PS-P2 Scanner Benchmark",
+    "timestamp_utc": "2026-10-16T16:40:49Z",
+    "target_directory": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\my_demo_app",
+    "runs_per_mode": 2,
+    "line_match_tolerance": 0,
+    "environment": {
+      "platform_name": "Platform A (Local Workstation/Cloud Host)",
+      "os_name": "Windows",
+      "os_version": "10.0.26200",
+      "architecture": "AMD64",
+      "python_version": "3.14.6",
+      "cpu_count_logical": 14,
+      "cpu_count_physical": 14,
+      "total_ram_mb": 15811.94
+    }
+  },
+  "platform_configurations_status": {
+    "Platform_A": "Configured (Resource-rich host / Cloud VM)",
+    "Platform_B": "Measured on the host machine under Platform B configuration (max_workers=1, memory_limit_mb=512, scan_strategy=full). No OS-level virtualisation is applied; CPU and memory are not enforced by the kernel — only the scanner configuration reflects the constrained-server profile.",
+    "Platform_C": "IoT/Embedded target (Organizer QEMU/ARM image definition withheld)",
+    "Platform_D": "Custom Innovation: Selective High-Risk AST Scanner. high_risk_priority strategy: AST parse only for files containing asymmetric (HIGH-risk) patterns; fast regex for symmetric-only files. Per-file input-size boundary at 64 MB (not a process-wide OS heap limit).",
+    "Organizers_Sample_Repo": "Using local multi-language test fixtures (Organizer official planted repo withheld until judging)"
+  },
+  "results": {
+    "regex_only": {
+      "mode": "regex_only",
+      "runs": 2,
+      "run_times_ms": [
+        2.51,
+        1.833
+      ],
+      "mean_time_ms": 2.171,
+      "min_time_ms": 1.833,
+      "max_time_ms": 2.51,
+      "stdev_time_ms": 0.479,
+      "peak_memory_kb": 134.68,
+      "accuracy": {
+        "total_expected": 0,
+        "total_detected": 3,
+        "true_positives": 0,
+        "false_positives": 3,
+        "false_negatives": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "coverage_status": "verified"
+      },
+      "findings_count": 3,
+      "scan_coverage": {
+        "files_discovered": 1,
+        "files_scanned": 1,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "crypto_example.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
+    },
+    "ast_enriched": {
+      "mode": "ast_enriched",
+      "runs": 2,
+      "run_times_ms": [
+        3.488,
+        3.492
+      ],
+      "mean_time_ms": 3.49,
+      "min_time_ms": 3.488,
+      "max_time_ms": 3.492,
+      "stdev_time_ms": 0.003,
+      "peak_memory_kb": 139.2,
+      "accuracy": {
+        "total_expected": 0,
+        "total_detected": 3,
+        "true_positives": 0,
+        "false_positives": 3,
+        "false_negatives": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "coverage_status": "verified"
+      },
+      "findings_count": 3,
+      "scan_coverage": {
+        "files_discovered": 1,
+        "files_scanned": 1,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "crypto_example.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
+    },
+    "platform_b": {
+      "mode": "platform_b",
+      "runs": 2,
+      "run_times_ms": [
+        5.547,
+        4.049
+      ],
+      "mean_time_ms": 4.798,
+      "min_time_ms": 4.049,
+      "max_time_ms": 5.547,
+      "stdev_time_ms": 1.059,
+      "peak_memory_kb": 138.7,
+      "accuracy": {
+        "total_expected": 0,
+        "total_detected": 3,
+        "true_positives": 0,
+        "false_positives": 3,
+        "false_negatives": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "coverage_status": "verified"
+      },
+      "findings_count": 3,
+      "scan_coverage": {
+        "files_discovered": 1,
+        "files_scanned": 1,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "crypto_example.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
+    },
+    "platform_d": {
+      "mode": "platform_d",
+      "runs": 2,
+      "run_times_ms": [
+        4.76,
+        5.549
+      ],
+      "mean_time_ms": 5.155,
+      "min_time_ms": 4.76,
+      "max_time_ms": 5.549,
+      "stdev_time_ms": 0.558,
+      "peak_memory_kb": 134.83,
+      "accuracy": {
+        "total_expected": 0,
+        "total_detected": 2,
+        "true_positives": 0,
+        "false_positives": 2,
+        "false_negatives": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "coverage_status": "verified"
+      },
+      "findings_count": 2,
+      "scan_coverage": {
+        "files_discovered": 1,
+        "files_scanned": 1,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "crypto_example.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
+    }
+  },
+  "comparison": {
+    "mean_runtime_delta_ms": 1.319,
+    "runtime_overhead_ratio": 1.61,
+    "false_positive_reduction": 0,
+    "precision_delta": 0.0,
+    "recall_delta": 0.0,
+    "f1_score_delta": 0.0,
+    "platform_b_vs_ast_time_delta_ms": 1.308,
+    "platform_b_note": "Platform B runs same full-AST scan as Platform A on the host machine under max_workers=1 config. No OS virtualisation applied.",
+    "platform_d_vs_regex_time_delta_ms": 2.984,
+    "platform_d_vs_ast_time_delta_ms": 1.665,
+    "platform_d_precision_delta": 0.0,
+    "platform_d_fp_reduction": 1
+  }
+}

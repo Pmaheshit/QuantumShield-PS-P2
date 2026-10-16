@@ -136,6 +136,20 @@ class TestPythonPositive:
         ec_findings = [f for f in findings if f.algorithm in ("ECDSA", "ECDH")]
         assert all(f.risk_level == RiskLevel.HIGH for f in ec_findings)
 
+    def test_ecc_import_and_key_generation_are_not_ecdsa(self, tmp_path):
+        file_path = tmp_path / "ecc.py"
+        file_path.write_text(
+            "from Crypto.PublicKey import ECC\n"
+            'key = ECC.generate(curve="P-256")\n',
+            encoding="utf-8",
+        )
+
+        findings = RegexScanner(root=file_path).scan()
+
+        assert [(finding.algorithm, finding.line_number) for finding in findings] == [
+            ("ECC", 2),
+        ]
+
     def test_aes128_detected_in_python(self):
         findings = scan_file(AES_PY)
         assert "AES-128" in algorithms_found(findings), \
@@ -410,6 +424,15 @@ class TestJavaPositive:
         algos = algorithms_found(findings)
         assert "ECDSA" in algos, f"Got: {algos}"
 
+    def test_java_ec_parameter_construction_is_one_generic_ecc_finding(self):
+        findings = [
+            finding for finding in scan_file(JAVA)
+            if finding.algorithm == "ECC" and finding.line_number == 30
+        ]
+
+        assert len(findings) == 1
+        assert findings[0].matched_api == "ECGenParameterSpec"
+
     def test_ecdh_detected_in_java(self):
         findings = scan_file(JAVA)
         algos = algorithms_found(findings)
@@ -439,12 +462,82 @@ class TestJavaPositive:
             assert 1 <= f.line_number <= len(source_lines), \
                 f"Line {f.line_number} out of bounds for file with {len(source_lines)} lines"
 
+    def test_rsa_signature_and_cipher_recommendations_are_operation_specific(
+        self, tmp_path
+    ):
+        file_path = tmp_path / "rsa.java"
+        file_path.write_text(
+            'Signature signature = Signature.getInstance("SHA256withRSA"); '
+            'Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");\n',
+            encoding="utf-8",
+        )
+
+        findings = RegexScanner(root=file_path).scan()
+
+        assert len(findings) == 2
+        signature_finding = next(f for f in findings if "withRSA" in f.matched_api)
+        cipher_finding = next(f for f in findings if f.matched_api == "RSA")
+        assert "ML-DSA" in signature_finding.replacement
+        assert "ML-KEM" not in signature_finding.replacement
+        assert "ML-KEM" in cipher_finding.replacement
+        assert "ML-DSA" not in cipher_finding.replacement
+
+    @pytest.mark.parametrize(
+        ("suffix", "source", "expected_algorithm", "expected_line"),
+        [
+            (
+                ".java",
+                '// AES-128 is only documentation\n'
+                'Cipher cipher = Cipher.getInstance("AES-128/GCM/NoPadding");\n',
+                "AES-128",
+                2,
+            ),
+            (
+                ".c",
+                "/* EVP_PKEY_RSA is only documentation\n"
+                " * RSA_generate_key_ex is mentioned here too. */\n"
+                "RSA *key = RSA_new();\n",
+                "RSA",
+                3,
+            ),
+        ],
+    )
+    def test_c_like_comments_are_ignored_without_masking_real_apis(
+        self, tmp_path, suffix, source, expected_algorithm, expected_line
+    ):
+        file_path = tmp_path / f"comments{suffix}"
+        file_path.write_text(source, encoding="utf-8")
+
+        findings = RegexScanner(root=file_path).scan()
+
+        assert all(finding.line_number > 1 for finding in findings)
+        assert any(
+            finding.algorithm == expected_algorithm
+            and finding.line_number == expected_line
+            for finding in findings
+        )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # C: positive detection tests
 # ──────────────────────────────────────────────────────────────────────────────
 
 class TestCPositive:
+
+    def test_c_backslash_continued_line_comment_is_ignored(self, tmp_path):
+        file_path = tmp_path / "continued_comment.c"
+        file_path.write_text(
+            "// EVP_PKEY_RSA remains commented \\\n"
+            "EVP_PKEY_RSA is still part of that comment\n"
+            "RSA *key = RSA_new();\n",
+            encoding="utf-8",
+        )
+
+        findings = RegexScanner(root=file_path).scan()
+
+        assert [(finding.algorithm, finding.line_number) for finding in findings] == [
+            ("RSA", 3),
+        ]
 
     def test_rsa_detected_in_c(self):
         findings = scan_file(C_FILE)

@@ -96,6 +96,60 @@ class TestUnifiedScanner:
         assert len(call_findings) == 1
         assert call_findings[0].detection_method == "ast"
 
+    def test_distinct_same_line_algorithms_are_deduplicated_independently(
+        self, tmp_path
+    ):
+        source = (
+            "from cryptography.hazmat.primitives.asymmetric import ec\n"
+            "from cryptography.hazmat.primitives import hashes\n"
+            "signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = [finding for finding in scanner.scan() if finding.line_number == 3]
+
+        assert {(finding.algorithm, finding.detection_method) for finding in findings} == {
+            ("ECDSA", "ast"),
+            ("SHA-256", "ast"),
+        }
+
+    def test_generic_ecc_and_explicit_operations_keep_distinct_labels(self, tmp_path):
+        source = (
+            "from cryptography.hazmat.primitives.asymmetric import ec\n"
+            "from cryptography.hazmat.primitives import hashes\n"
+            "from Crypto.PublicKey import ECC\n"
+            "private_key = ec.generate_private_key(ec.SECP256R1())\n"
+            'other_key = ECC.generate(curve="P-256")\n'
+            "signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))\n"
+            "shared = private_key.exchange(ec.ECDH(), peer_key)\n"
+        )
+        (tmp_path / "example.py").write_text(source, encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+
+        assert [(finding.algorithm, finding.line_number) for finding in findings] == [
+            ("ECC", 4),
+            ("ECC", 5),
+            ("ECDSA", 6),
+            ("SHA-256", 6),
+            ("ECDH", 7),
+        ]
+        assert all(finding.detection_method == "ast" for finding in findings)
+
+    def test_repeated_c_operations_on_one_line_remain_distinct(self, tmp_path):
+        file_path = tmp_path / "same_line.c"
+        file_path.write_text("RSA *a = RSA_new(); RSA *b = RSA_new();\n", encoding="utf-8")
+        scanner = UnifiedScanner(root=tmp_path, use_ast_for_python=True)
+
+        findings = scanner.scan()
+
+        assert [(finding.algorithm, finding.line_number) for finding in findings] == [
+            ("RSA", 1),
+            ("RSA", 1),
+        ]
+
     @pytest.mark.parametrize(
         ("key", "algorithm", "key_size"),
         [
@@ -212,10 +266,11 @@ class TestUnifiedScanner:
     def test_source_column_is_internal_to_finding_schema(self):
         finding = Finding(
             "example.py", 1, "python", "AES.new", "AES-128", "MODERATE", "rep",
-            "cipher = AES.new(key)", _source_column=10,
+            "cipher = AES.new(key)", _source_column=10, _source_end_column=17,
         )
 
         assert "_source_column" not in finding.to_dict()
+        assert "_source_end_column" not in finding.to_dict()
 
     def test_multiline_api_call_is_retained_once(self, tmp_path):
         source = (

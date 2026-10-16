@@ -55,10 +55,12 @@ class Finding:
     evidence: str           # full source line (stripped) for human review
     detection_method: str = "regex"
     _source_column: Optional[int] = field(default=None, repr=False, compare=False)
+    _source_end_column: Optional[int] = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict:
         data = asdict(self)
         data.pop("_source_column", None)
+        data.pop("_source_end_column", None)
         return data
 
 
@@ -85,12 +87,11 @@ _PYTHON_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'["\']RSA["\']\s*[,\)]', re.IGNORECASE), "RSA"),
 
     # ── ECC / ECDSA / ECDH ──────────────────────────────────────────────────
-    (re.compile(r"(from\s+cryptography\.[^\n]*\bec\b)", re.IGNORECASE), "ECDSA"),
-    (re.compile(r"(ec\.generate_private_key)", re.IGNORECASE), "ECDSA"),
+    (re.compile(r"(ec\.generate_private_key)", re.IGNORECASE), "ECC"),
+    (re.compile(r"(ECC\s*\.\s*generate)", re.IGNORECASE), "ECC"),
     (re.compile(r"(ECDSA\b)", re.IGNORECASE), "ECDSA"),
     (re.compile(r"(ECDH\b)", re.IGNORECASE), "ECDH"),
-    (re.compile(r"(from\s+Crypto\.PublicKey\s+import\s+ECC)", re.IGNORECASE), "ECDSA"),
-    (re.compile(r'["\']EC["\']\s*[,\)]', re.IGNORECASE), "ECDSA"),
+    (re.compile(r'["\']EC["\']\s*[,\)]', re.IGNORECASE), "ECC"),
 
     # ── AES-128 ──────────────────────────────────────────────────────────────
     # Key length 128 bits = 16 bytes
@@ -121,11 +122,12 @@ _JAVA_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'(RSAPublicKeySpec|RSAPrivateKeySpec|RSAKeyGenParameterSpec)'), "RSA"),
 
     # ── ECC / ECDSA / ECDH ──────────────────────────────────────────────────
-    (re.compile(r'KeyPairGenerator\.getInstance\s*\(\s*"(EC)"', re.IGNORECASE), "ECDSA"),
-    (re.compile(r'KeyFactory\.getInstance\s*\(\s*"(EC)"', re.IGNORECASE), "ECDSA"),
+    (re.compile(r'KeyPairGenerator\.getInstance\s*\(\s*"(EC)"', re.IGNORECASE), "ECC"),
+    (re.compile(r'KeyFactory\.getInstance\s*\(\s*"(EC)"', re.IGNORECASE), "ECC"),
     (re.compile(r'Signature\.getInstance\s*\(\s*"(SHA[0-9]+with(?:ECDSA|EC))"', re.IGNORECASE), "ECDSA"),
+    (re.compile(r'Signature\.getInstance\s*\(\s*"(SHA[0-9]+withRSA|RSASSA-PSS)"', re.IGNORECASE), "RSA"),
     (re.compile(r'KeyAgreement\.getInstance\s*\(\s*"(ECDH)"', re.IGNORECASE), "ECDH"),
-    (re.compile(r'(ECGenParameterSpec|ECPublicKeySpec|ECPrivateKeySpec)'), "ECDSA"),
+    (re.compile(r'\bnew\s+(ECGenParameterSpec|ECPublicKeySpec|ECPrivateKeySpec)\s*\('), "ECC"),
 
     # ── AES-128 ──────────────────────────────────────────────────────────────
     (re.compile(r'(AES[_/\-]128)', re.IGNORECASE), "AES-128"),
@@ -154,10 +156,13 @@ _C_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b(d2i_RSAPrivateKey|d2i_RSAPublicKey)\b"), "RSA"),
 
     # ── ECC / ECDSA ──────────────────────────────────────────────────────────
-    (re.compile(r"\b(EC_KEY_new(?:_by_curve_name)?)\s*\("), "ECDSA"),
-    (re.compile(r"\b(EVP_PKEY_EC)\b"), "ECDSA"),
+    (re.compile(r"\b(EC_KEY_new(?:_by_curve_name)?)\s*\("), "ECC"),
+    (re.compile(r"\b(EVP_PKEY_EC)\b"), "ECC"),
     (re.compile(r"\b(ECDSA_sign|ECDSA_verify|ECDSA_SIG_new)\b"), "ECDSA"),
-    (re.compile(r"\b(EC_GROUP_new_by_curve_name)\b"), "ECDSA"),
+    (re.compile(r"\b(ECDH_compute_key)\b"), "ECDH"),
+    (re.compile(r"\b(EC_GROUP_new_by_curve_name)\b"), "ECC"),
+    (re.compile(r"\b(RSA_sign|RSA_verify|RSA_private_encrypt|RSA_public_decrypt)\b"), "RSA"),
+    (re.compile(r"\b(RSA_public_encrypt|RSA_private_decrypt)\b"), "RSA"),
 
     # ── AES-128 ──────────────────────────────────────────────────────────────
     (re.compile(r"\b(EVP_aes_128_(?:cbc|ecb|gcm|ctr|cfb|ofb))\b", re.IGNORECASE), "AES-128"),
@@ -308,6 +313,89 @@ def _mask_python_comments_and_strings_with_status(
     return "".join(masked), "; ".join(errors), aes_key_sizes
 
 
+def _mask_c_like_comments(source: str) -> str:
+    """Mask C/Java comments while preserving quoted literals and positions."""
+    masked = list(source)
+    length = len(source)
+
+    def mask_range(start: int, end: int) -> None:
+        for index in range(start, end):
+            if masked[index] not in "\r\n":
+                masked[index] = " "
+
+    index = 0
+    while index < length:
+        if source.startswith("//", index):
+            end = index + 2
+            while end < length:
+                if source[end] == "\n":
+                    if end > index and source[end - 1] == "\\":
+                        end += 1
+                        continue
+                    break
+                if source[end] == "\r":
+                    if end > index and source[end - 1] == "\\":
+                        end += 1
+                        if end < length and source[end] == "\n":
+                            end += 1
+                        continue
+                    break
+                end += 1
+            mask_range(index, end)
+            index = end
+            continue
+
+        if source.startswith("/*", index):
+            close = source.find("*/", index + 2)
+            end = length if close < 0 else close + 2
+            mask_range(index, end)
+            index = end
+            continue
+
+        if source.startswith('R"', index):
+            delimiter_end = source.find("(", index + 2, min(index + 19, length))
+            if delimiter_end >= 0:
+                delimiter = source[index + 2:delimiter_end]
+                close = source.find(")" + delimiter + '"', delimiter_end + 1)
+                index = length if close < 0 else close + len(delimiter) + 2
+                continue
+
+        if source.startswith('"""', index):
+            search_from = index + 3
+            while True:
+                close = source.find('"""', search_from)
+                if close < 0:
+                    index = length
+                    break
+                backslashes = 0
+                cursor = close - 1
+                while cursor >= index and source[cursor] == "\\":
+                    backslashes += 1
+                    cursor -= 1
+                if backslashes % 2 == 0:
+                    index = close + 3
+                    break
+                search_from = close + 3
+            continue
+
+        if source[index] in ("'", '"'):
+            quote = source[index]
+            index += 1
+            while index < length:
+                if source[index] == "\\":
+                    index += 2
+                elif source[index] == quote:
+                    index += 1
+                    break
+                else:
+                    index += 1
+            continue
+
+        index += 1
+
+    return "".join(masked)
+
+
 # Directories to skip (venvs, package installs, build outputs)
 _SKIP_DIRS: frozenset[str] = frozenset({
     ".venv", "venv", "env", "ENV", ".env",
@@ -443,7 +531,7 @@ class RegexScanner:
 
         _, patterns = _LANGUAGE_CONFIG[language]
         findings: list[Finding] = []
-        seen: set[tuple[int, int, str]] = set()
+        seen_spans: dict[tuple[int, str], list[tuple[int, int]]] = {}
 
         evidence_lines = source.splitlines()
         masking_error = ""
@@ -479,7 +567,7 @@ class RegexScanner:
                 for match_start, _, match, algorithm in matches
             )
         else:
-            scan_source = source
+            scan_source = _mask_c_like_comments(source)
             match_entries = (
                 (
                     line_no,
@@ -489,7 +577,7 @@ class RegexScanner:
                 )
                 for line_no, line in enumerate(scan_source.splitlines(), start=1)
                 for pattern, algorithm in patterns
-                if (match := pattern.search(line))
+                for match in pattern.finditer(line)
             )
 
         for line_no, source_column, m, algorithm in match_entries:
@@ -498,26 +586,28 @@ class RegexScanner:
                 key_size = aes_key_sizes.get(m.start(1) if m.lastindex else m.start())
                 if key_size in (16, 24, 32):
                     algorithm = f"AES-{key_size * 8}"
-            call_offset = (
-                line_starts[line_no - 1] + source_column
-                if language == "python"
-                else None
+            source_end_column = (
+                (m.end(1) if m.lastindex and m.lastindex >= 1 else m.end())
+                - (line_starts[line_no - 1] if language == "python" else 0)
             )
-            is_call = language == "python" and (
-                "(" in matched_api
-                or (
-                    call_offset is not None
-                    and scan_source[call_offset + len(matched_api):]
-                    .lstrip()
-                    .startswith("(")
-                )
-            )
-            key = (line_no, source_column if is_call else 0, algorithm)
-            if key in seen:
+            key = (line_no, algorithm)
+            spans = seen_spans.setdefault(key, [])
+            if any(
+                source_column < previous_end and previous_start < source_end_column
+                for previous_start, previous_end in spans
+            ):
                 continue
-            seen.add(key)
+            spans.append((source_column, source_end_column))
 
-            risk = self._classifier.classify(algorithm)
+            evidence = evidence_lines[line_no - 1].strip()
+            code_line = scan_source.splitlines()[line_no - 1]
+            statement_start = code_line.rfind(";", 0, source_column) + 1
+            statement_end = code_line.find(";", source_end_column)
+            if statement_end < 0:
+                statement_end = len(code_line)
+            code_context = code_line[statement_start:statement_end].strip()
+            purpose = self._infer_purpose(algorithm, matched_api, code_context)
+            risk = self._classifier.classify(algorithm, purpose=purpose)
             findings.append(Finding(
                 file_path=relative_path,
                 line_number=line_no,
@@ -526,14 +616,32 @@ class RegexScanner:
                 algorithm=algorithm,
                 risk_level=risk.level,
                 replacement=risk.replacement,
-                evidence=evidence_lines[line_no - 1].strip(),
+                evidence=evidence,
                 detection_method="regex",
                 _source_column=source_column,
+                _source_end_column=source_end_column,
             ))
 
         if masking_error:
             return findings, FileScanOutcome(relative_path, "failed", masking_error)
         return findings, FileScanOutcome(relative_path, "scanned")
+
+    @staticmethod
+    def _infer_purpose(algorithm: str, matched_api: str, evidence: str) -> Optional[str]:
+        if algorithm != "RSA":
+            return None
+        context = f"{matched_api} {evidence}".casefold()
+        if any(token in context for token in (
+            "withrsa", "rsassa-pss", "rsa_sign", "rsa_verify",
+            "rsa_private_encrypt", "rsa_public_decrypt",
+        )):
+            return "signature"
+        if any(token in context for token in (
+            "cipher.getinstance", "rsa_public_encrypt", "rsa_private_decrypt",
+            "pkcs1_oaep", "oaep",
+        )):
+            return "encryption"
+        return None
 
     @staticmethod
     def _read_source(path: Path) -> str:

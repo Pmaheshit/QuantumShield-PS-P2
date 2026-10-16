@@ -1,0 +1,85 @@
+{
+  "metadata": {
+    "tool": "QuantumShield PS-P2 Cryptographic Inventory & Migration Planner",
+    "version": "1.0.0",
+    "timestamp_utc": "2026-10-16T16:40:49.285252+00:00",
+    "scanned_root": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\my_demo_app",
+    "total_files_scanned": 1,
+    "files_discovered": 1,
+    "files_failed": 0,
+    "files_skipped": 0,
+    "total_findings": 3
+  },
+  "summary": {
+    "findings_by_risk": {
+      "HIGH": 2,
+      "MODERATE": 0,
+      "LOWER": 1,
+      "UNKNOWN": 0
+    },
+    "findings_by_language": {
+      "python": 3
+    },
+    "findings_by_algorithm": {
+      "RSA": 2,
+      "SHA-256": 1
+    }
+  },
+  "findings": [
+    {
+      "file_path": "crypto_example.py",
+      "line_number": 6,
+      "language": "python",
+      "matched_api": "rsa.generate_private_key",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "private_key = rsa.generate_private_key(",
+      "detection_method": "ast",
+      "confidence": "CONFIRMED",
+      "key_size": 2048,
+      "parameters": {
+        "key_size": 2048,
+        "public_exponent": 65537
+      },
+      "assumed_default": false,
+      "details": "RSA private key generation with key size 2048 bits"
+    },
+    {
+      "file_path": "crypto_example.py",
+      "line_number": 13,
+      "language": "python",
+      "matched_api": "hashlib.sha256",
+      "algorithm": "SHA-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
+      "evidence": "digest = hashlib.sha256(message).hexdigest()",
+      "detection_method": "ast",
+      "confidence": "CONFIRMED",
+      "key_size": null,
+      "parameters": {
+        "digest_bits": 256
+      },
+      "assumed_default": false,
+      "details": "SHA-256 cryptographic hash function invocation"
+    },
+    {
+      "file_path": "crypto_example.py",
+      "line_number": 3,
+      "language": "python",
+      "matched_api": "from cryptography.hazmat.primitives.asymmetric import rsa",
+      "algorithm": "RSA",
+      "risk_level": "HIGH",
+      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "evidence": "from cryptography.hazmat.primitives.asymmetric import rsa",
+      "detection_method": "regex",
+      "confidence": "INFERRED"
+    }
+  ],
+  "scanner_limitations": [
+    "Static analysis only: unresolved runtime values, dynamic class loaders, or network-retrieved keys cannot be resolved; AES inference is limited to explicit sizes, known generators, and unambiguous single local assignments.",
+    "Java and C comments are masked; string literals are preserved for algorithm parameters, so unrelated identifiers in strings may still match.",
+    "AST scanning applies strictly to valid Python syntax; unparseable Python files report syntax error findings.",
+    "AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed."
+  ]
+}

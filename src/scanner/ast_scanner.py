@@ -147,6 +147,76 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # Track imports: local_alias -> full_qualified_name
         # e.g., "from cryptography.hazmat.primitives.asymmetric import rsa as my_rsa" -> "my_rsa": "rsa"
         self.aliases: dict[str, str] = {}
+        self._key_byte_lengths: dict[str, tuple[tuple[int, int], int]] = {}
+
+    def _visit_scoped_node(self, node: ast.AST) -> None:
+        outer_key_lengths = self._key_byte_lengths
+        self._key_byte_lengths = {}
+        self._key_byte_lengths = self._collect_local_key_lengths(node)
+        try:
+            self.generic_visit(node)
+        finally:
+            self._key_byte_lengths = outer_key_lengths
+
+    def _collect_local_key_lengths(
+        self, node: ast.AST
+    ) -> dict[str, tuple[tuple[int, int], int]]:
+        assignment_counts: dict[str, int] = {}
+        declared_outer_names: set[str] = set()
+        for child in ast.walk(node):
+            if isinstance(child, ast.Name) and isinstance(
+                child.ctx, (ast.Store, ast.Del)
+            ):
+                assignment_counts[child.id] = assignment_counts.get(child.id, 0) + 1
+            elif isinstance(child, (ast.Global, ast.Nonlocal)):
+                declared_outer_names.update(child.names)
+
+        known_lengths: dict[str, tuple[tuple[int, int], int]] = {}
+        for statement in getattr(node, "body", []):
+            if isinstance(statement, ast.Assign):
+                targets = statement.targets
+                value = statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                targets = [statement.target]
+                value = statement.value
+            else:
+                continue
+
+            key_bits, confidence = self._deduce_byte_key_length(value)
+            if key_bits not in (128, 192, 256) or confidence != "CONFIRMED":
+                continue
+            assignment_position = (
+                getattr(statement, "end_lineno", statement.lineno),
+                getattr(statement, "end_col_offset", statement.col_offset),
+            )
+            for target in targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and assignment_counts.get(target.id) == 1
+                    and target.id not in declared_outer_names
+                ):
+                    known_lengths[target.id] = (assignment_position, key_bits)
+        return known_lengths
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        outer_key_lengths = self._key_byte_lengths
+        self._key_byte_lengths = {}
+        try:
+            self.generic_visit(node)
+        finally:
+            self._key_byte_lengths = outer_key_lengths
 
     def _get_evidence(self, lineno: int) -> str:
         if 1 <= lineno <= len(self.source_lines):
@@ -172,13 +242,24 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         findings_before = len(self.findings)
         self._analyze_call(node)
         if len(self.findings) > findings_before:
-            source_line = self.source_lines[getattr(node, "lineno", 1) - 1]
+            function_line = getattr(node.func, "lineno", getattr(node, "lineno", 1))
+            source_line = self.source_lines[function_line - 1]
             byte_column = getattr(node.func, "col_offset", node.col_offset)
             char_column = len(
                 source_line.encode("utf-8")[:byte_column].decode("utf-8")
             )
+            end_line = getattr(node.func, "end_lineno", function_line)
+            end_column = None
+            if end_line == function_line:
+                end_source_line = self.source_lines[function_line - 1]
+                end_byte_column = getattr(node.func, "end_col_offset", None)
+                if end_byte_column is not None:
+                    end_column = len(
+                        end_source_line.encode("utf-8")[:end_byte_column].decode("utf-8")
+                    )
             for finding in self.findings[findings_before:]:
                 finding._source_column = char_column
+                finding._source_end_column = end_column
         self.generic_visit(node)
 
     def _resolve_callable_name(self, func_node: ast.AST) -> tuple[str, str]:
@@ -655,6 +736,14 @@ class _CryptoAstVisitor(ast.NodeVisitor):
     def _deduce_byte_key_length(self, node: Optional[ast.AST]) -> tuple[Optional[int], str]:
         if node is None:
             return None, "UNKNOWN"
+
+        if isinstance(node, ast.Name):
+            known_key = self._key_byte_lengths.get(node.id)
+            if known_key is not None:
+                assignment_position, key_bits = known_key
+                use_position = (node.lineno, node.col_offset)
+                if assignment_position < use_position:
+                    return key_bits, "CONFIRMED"
 
         # Direct bytes constant: b"..."
         val = self._extract_constant_val(node)

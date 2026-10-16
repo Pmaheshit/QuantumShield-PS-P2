@@ -1,5 +1,5 @@
 mode,runs,mean_time_ms,min_time_ms,max_time_ms,stdev_time_ms,peak_memory_kb,files_discovered,files_scanned,files_failed,files_skipped,coverage_status,total_detected,true_positives,false_positives,false_negatives,precision,recall,f1_score
-regex_only,10,21.868,20.617,25.419,1.417,203.31,7,7,0,0,verified,49,10,39,8,0.2041,0.5556,0.2985
-ast_enriched,10,43.228,40.416,55.87,4.704,231.14,7,7,0,0,verified,62,16,46,2,0.2581,0.8889,0.4
-platform_b,10,40.676,37.653,46.104,2.822,226.81,7,7,0,0,verified,62,16,46,2,0.2581,0.8889,0.4
-platform_d,10,38.115,34.772,43.546,3.026,224.91,7,7,0,0,verified,49,16,33,2,0.3265,0.8889,0.4776
+regex_only,2,44.32,42.923,45.716,1.975,192.0,7,7,0,0,verified,43,12,31,6,0.2791,0.6667,0.3934
+ast_enriched,2,60.685,59.835,61.535,1.202,206.44,7,7,0,0,verified,47,18,29,0,0.383,1.0,0.5538
+platform_b,2,58.733,58.723,58.743,0.014,206.52,7,7,0,0,verified,47,18,29,0,0.383,1.0,0.5538
+platform_d,2,49.188,47.955,50.421,1.744,204.5,7,7,0,0,verified,44,16,28,2,0.3636,0.8889,0.5161

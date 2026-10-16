@@ -50,8 +50,8 @@ class InventoryReportGenerator:
     """
 
     LIMITATIONS = [
-        "Static analysis only: runtime-computed variables, dynamic class loaders, or network-retrieved keys cannot be evaluated statically.",
-        "Regex detection on Java and C may flag cryptographic identifiers in inactive comments or string literals.",
+        "Static analysis only: unresolved runtime values, dynamic class loaders, or network-retrieved keys cannot be resolved; AES inference is limited to explicit sizes, known generators, and unambiguous single local assignments.",
+        "Java and C comments are masked; string literals are preserved for algorithm parameters, so unrelated identifiers in strings may still match.",
         "AST scanning applies strictly to valid Python syntax; unparseable Python files report syntax error findings.",
         "AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed.",
     ]
@@ -189,7 +189,7 @@ class InventoryReportGenerator:
         lines.append("")
         lines.append("| Risk Level | Count | Threat Rationale | Migration Priority |")
         lines.append("| :--- | :---: | :--- | :--- |")
-        lines.append(f"| 🔴 **HIGH** | {summary['findings_by_risk'].get('HIGH', 0)} | Vulnerable to Shor's Algorithm (RSA / ECC broken) | Immediate (Phase 1 Target) |")
+        lines.append(f"| 🔴 **HIGH** | {summary['findings_by_risk'].get('HIGH', 0)} | RSA/ECC operations may be exposed to Shor's algorithm; API matches do not establish system-level exposure. | Prioritize operation review |")
         lines.append(f"| 🟡 **MODERATE** | {summary['findings_by_risk'].get('MODERATE', 0)} | Key space halved by Grover's Algorithm (AES-128) | Medium (Upgrade to AES-256) |")
         lines.append(f"| 🟢 **LOWER** | {summary['findings_by_risk'].get('LOWER', 0)} | Quantum-resistant symmetric baseline (AES-256, SHA-256) | Low / Retain current baseline |")
         lines.append(f"| ⚪ **UNKNOWN** | {summary['findings_by_risk'].get('UNKNOWN', 0)} | Unresolved algorithm or key size, or unparseable source element | Requires manual review |")

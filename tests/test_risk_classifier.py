@@ -45,6 +45,9 @@ class TestHighRisk:
         p = clf.classify("ECC")
         assert p.level == RiskLevel.HIGH
 
+    def test_ec_alias_is_generic_ecc(self, clf):
+        assert clf.classify("EC").algorithm == "ECC"
+
     def test_rsa_replacement_mentions_ml_kem(self, clf):
         p = clf.classify("RSA")
         assert "ML-KEM" in p.replacement or "ML-DSA" in p.replacement
@@ -66,6 +69,15 @@ class TestHighRisk:
         p = clf.classify("RSA", purpose="encapsulation")
         assert "ML-KEM" in p.replacement
         assert "ML-DSA" not in p.replacement
+
+    def test_ecc_recommendation_depends_on_operation_purpose(self, clf):
+        signature = clf.classify("ECC", purpose="signature")
+        key_establishment = clf.classify("ECC", purpose="key_exchange")
+
+        assert "ML-DSA" in signature.replacement
+        assert "ML-KEM" not in signature.replacement
+        assert "ML-KEM" in key_establishment.replacement
+        assert "ML-DSA" not in key_establishment.replacement
 
 
 

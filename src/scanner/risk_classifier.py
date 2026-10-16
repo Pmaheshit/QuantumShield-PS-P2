@@ -68,7 +68,10 @@ _PROFILES: dict[str, RiskProfile] = {
         algorithm="ECC",
         level=RiskLevel.HIGH,
         reason="Shor's algorithm solves the elliptic-curve discrete-log problem.",
-        replacement="ML-KEM (FIPS 203) or ML-DSA (FIPS 204)",
+        replacement=(
+            "Choose ML-KEM (FIPS 203) for key establishment or "
+            "ML-DSA (FIPS 204) for signatures based on the actual use"
+        ),
     ),
 
     # ── MODERATE-risk (Grover's algorithm) ───────────────────────────────────
@@ -134,7 +137,7 @@ _ALIASES: dict[str, str] = {
     # ECDSA / EC variants
     "ecdsa":               "ECDSA",
     "ecdh":                "ECDH",
-    "ec":                  "ECDSA",
+    "ec":                  "ECC",
     "ecc":                 "ECC",
     "elliptic-curve":      "ECC",
     "elliptic curve":      "ECC",

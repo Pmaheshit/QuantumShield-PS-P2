@@ -2,35 +2,35 @@
   "metadata": {
     "tool": "QuantumShield PS-P2 Cryptographic Inventory & Migration Planner",
     "version": "1.0.0",
-    "timestamp_utc": "2026-10-16T05:45:12.820568+00:00",
+    "timestamp_utc": "2026-10-16T16:36:40.397799+00:00",
     "scanned_root": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\tests\\fixtures",
     "total_files_scanned": 7,
     "files_discovered": 7,
     "files_failed": 0,
     "files_skipped": 0,
-    "total_findings": 62
+    "total_findings": 47
   },
   "summary": {
     "findings_by_risk": {
-      "HIGH": 32,
-      "MODERATE": 5,
-      "LOWER": 20,
-      "UNKNOWN": 5
+      "HIGH": 25,
+      "MODERATE": 4,
+      "LOWER": 15,
+      "UNKNOWN": 3
     },
     "findings_by_language": {
-      "c": 13,
-      "python": 33,
-      "java": 16
+      "c": 12,
+      "python": 23,
+      "java": 12
     },
     "findings_by_algorithm": {
-      "RSA": 18,
-      "ECDSA": 9,
-      "AES-128": 5,
+      "RSA": 15,
+      "ECC": 5,
+      "ECDSA": 3,
+      "AES-128": 4,
       "AES-256": 4,
-      "SHA-256": 16,
-      "AES-UNKNOWN": 5,
-      "ECC": 2,
-      "ECDH": 3
+      "SHA-256": 11,
+      "ECDH": 2,
+      "AES-UNKNOWN": 3
     }
   },
   "findings": [
@@ -60,18 +60,6 @@
     },
     {
       "file_path": "snippet_aes.c",
-      "line_number": 28,
-      "language": "c",
-      "matched_api": "EVP_PKEY_RSA",
-      "algorithm": "RSA",
-      "risk_level": "HIGH",
-      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
-      "evidence": "/* EVP_PKEY_RSA type constant used for type checks */",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_aes.c",
       "line_number": 29,
       "language": "c",
       "matched_api": "EVP_PKEY_RSA",
@@ -87,9 +75,9 @@
       "line_number": 38,
       "language": "c",
       "matched_api": "EC_KEY_new_by_curve_name",
-      "algorithm": "ECDSA",
+      "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "replacement": "Choose ML-KEM (FIPS 203) for key establishment or ML-DSA (FIPS 204) for signatures based on the actual use",
       "evidence": "EC_KEY *key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -195,36 +183,36 @@
       "line_number": 15,
       "language": "python",
       "matched_api": "AES.new",
-      "algorithm": "AES-UNKNOWN",
-      "risk_level": "UNKNOWN",
-      "replacement": "Determine the AES key size before assigning a risk level",
+      "algorithm": "AES-128",
+      "risk_level": "MODERATE",
+      "replacement": "Upgrade to AES-256",
       "evidence": "cipher = AES.new(key, AES.MODE_GCM)",
       "detection_method": "ast",
-      "confidence": "INFERRED",
-      "key_size": null,
+      "confidence": "CONFIRMED",
+      "key_size": 128,
       "parameters": {
-        "key_bits": null
+        "key_bits": 128
       },
       "assumed_default": false,
-      "details": "AES cipher construction with unknown key size"
+      "details": "AES cipher construction with 128-bit key"
     },
     {
       "file_path": "snippet_aes.py",
       "line_number": 32,
       "language": "python",
       "matched_api": "AES.new",
-      "algorithm": "AES-UNKNOWN",
-      "risk_level": "UNKNOWN",
-      "replacement": "Determine the AES key size before assigning a risk level",
+      "algorithm": "AES-256",
+      "risk_level": "LOWER",
+      "replacement": "No change required; AES-256 is quantum-safe at current security levels",
       "evidence": "cipher = AES.new(key, AES.MODE_GCM)",
       "detection_method": "ast",
-      "confidence": "INFERRED",
-      "key_size": null,
+      "confidence": "CONFIRMED",
+      "key_size": 256,
       "parameters": {
-        "key_bits": null
+        "key_bits": 256
       },
       "assumed_default": false,
-      "details": "AES cipher construction with unknown key size"
+      "details": "AES cipher construction with 256-bit key"
     },
     {
       "file_path": "snippet_aes.py",
@@ -287,25 +275,13 @@
       "confidence": "INFERRED"
     },
     {
-      "file_path": "snippet_aes.py",
-      "line_number": 48,
-      "language": "python",
-      "matched_api": "hashlib.new(\"sha256\"",
-      "algorithm": "SHA-256",
-      "risk_level": "LOWER",
-      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
-      "evidence": "h = hashlib.new(\"sha256\")",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
       "file_path": "snippet_ecc.py",
       "line_number": 12,
       "language": "python",
       "matched_api": "ec.generate_private_key",
       "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-KEM (FIPS 203) or ML-DSA (FIPS 204)",
+      "replacement": "Choose ML-KEM (FIPS 203) for key establishment or ML-DSA (FIPS 204) for signatures based on the actual use",
       "evidence": "private_key = ec.generate_private_key(ec.SECP256R1())",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
@@ -372,7 +348,7 @@
       "matched_api": "ECC.generate",
       "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-KEM (FIPS 203) or ML-DSA (FIPS 204)",
+      "replacement": "Choose ML-KEM (FIPS 203) for key establishment or ML-DSA (FIPS 204) for signatures based on the actual use",
       "evidence": "key = ECC.generate(curve=\"P-256\")",
       "detection_method": "ast",
       "confidence": "CONFIRMED",
@@ -383,66 +359,6 @@
       },
       "assumed_default": false,
       "details": "PyCryptodome ECC.generate with curve P-256"
-    },
-    {
-      "file_path": "snippet_ecc.py",
-      "line_number": 6,
-      "language": "python",
-      "matched_api": "from cryptography.hazmat.primitives.asymmetric import ec",
-      "algorithm": "ECDSA",
-      "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
-      "evidence": "from cryptography.hazmat.primitives.asymmetric import ec",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecc.py",
-      "line_number": 18,
-      "language": "python",
-      "matched_api": "ECDSA",
-      "algorithm": "ECDSA",
-      "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
-      "evidence": "return private_key.sign(message, ec.ECDSA(hashes.SHA256()))",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecc.py",
-      "line_number": 18,
-      "language": "python",
-      "matched_api": "SHA256",
-      "algorithm": "SHA-256",
-      "risk_level": "LOWER",
-      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
-      "evidence": "return private_key.sign(message, ec.ECDSA(hashes.SHA256()))",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecc.py",
-      "line_number": 23,
-      "language": "python",
-      "matched_api": "ECDH",
-      "algorithm": "ECDH",
-      "risk_level": "HIGH",
-      "replacement": "ML-KEM (FIPS 203) for key exchange",
-      "evidence": "shared_key = private_key.exchange(ec.ECDH(), peer_public_key)",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecc.py",
-      "line_number": 28,
-      "language": "python",
-      "matched_api": "from Crypto.PublicKey import ECC",
-      "algorithm": "ECDSA",
-      "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
-      "evidence": "from Crypto.PublicKey import ECC",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
     },
     {
       "file_path": "snippet_ecdsa.java",
@@ -463,7 +379,7 @@
       "matched_api": "RSA",
       "algorithm": "RSA",
       "risk_level": "HIGH",
-      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
+      "replacement": "ML-KEM (FIPS 203) for key establishment / encapsulation",
       "evidence": "Cipher cipher = Cipher.getInstance(\"RSA/ECB/PKCS1Padding\");",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -473,9 +389,9 @@
       "line_number": 29,
       "language": "java",
       "matched_api": "EC",
-      "algorithm": "ECDSA",
+      "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "replacement": "Choose ML-KEM (FIPS 203) for key establishment or ML-DSA (FIPS 204) for signatures based on the actual use",
       "evidence": "KeyPairGenerator kpg = KeyPairGenerator.getInstance(\"EC\");",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -485,9 +401,9 @@
       "line_number": 30,
       "language": "java",
       "matched_api": "ECGenParameterSpec",
-      "algorithm": "ECDSA",
+      "algorithm": "ECC",
       "risk_level": "HIGH",
-      "replacement": "ML-DSA (FIPS 204) for signatures",
+      "replacement": "Choose ML-KEM (FIPS 203) for key establishment or ML-DSA (FIPS 204) for signatures based on the actual use",
       "evidence": "ECGenParameterSpec ecSpec = new ECGenParameterSpec(\"secp256r1\");",
       "detection_method": "regex",
       "confidence": "INFERRED"
@@ -513,18 +429,6 @@
       "risk_level": "HIGH",
       "replacement": "ML-KEM (FIPS 203) for key exchange",
       "evidence": "KeyAgreement ka = KeyAgreement.getInstance(\"ECDH\");",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecdsa.java",
-      "line_number": 52,
-      "language": "java",
-      "matched_api": "AES-128",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
-      "evidence": "// ── AES-128 (MODERATE risk) ────────────────────────────────────────────",
       "detection_method": "regex",
       "confidence": "INFERRED"
     },
@@ -566,30 +470,6 @@
     },
     {
       "file_path": "snippet_ecdsa.java",
-      "line_number": 62,
-      "language": "java",
-      "matched_api": "AES-128",
-      "algorithm": "AES-128",
-      "risk_level": "MODERATE",
-      "replacement": "Upgrade to AES-256",
-      "evidence": "// AES-128 in use",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecdsa.java",
-      "line_number": 67,
-      "language": "java",
-      "matched_api": "AES-256",
-      "algorithm": "AES-256",
-      "risk_level": "LOWER",
-      "replacement": "No change required; AES-256 is quantum-safe at current security levels",
-      "evidence": "// ── AES-256 (LOWER risk) ───────────────────────────────────────────────",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecdsa.java",
       "line_number": 69,
       "language": "java",
       "matched_api": "AES",
@@ -609,18 +489,6 @@
       "risk_level": "LOWER",
       "replacement": "No change required; AES-256 is quantum-safe at current security levels",
       "evidence": "keyGenerator.init(256);          // 256-bit key",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_ecdsa.java",
-      "line_number": 74,
-      "language": "java",
-      "matched_api": "SHA-256",
-      "algorithm": "SHA-256",
-      "risk_level": "LOWER",
-      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
-      "evidence": "// ── SHA-256 (LOWER risk) ───────────────────────────────────────────────",
       "detection_method": "regex",
       "confidence": "INFERRED"
     },
@@ -819,30 +687,6 @@
     },
     {
       "file_path": "snippet_rsa.py",
-      "line_number": 26,
-      "language": "python",
-      "matched_api": "SHA256",
-      "algorithm": "SHA-256",
-      "risk_level": "LOWER",
-      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
-      "evidence": "mgf=padding.MGF1(hashes.SHA256()),",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_rsa.py",
-      "line_number": 29,
-      "language": "python",
-      "matched_api": "SHA256",
-      "algorithm": "SHA-256",
-      "risk_level": "LOWER",
-      "replacement": "No change required; SHA-256 remains acceptable post-quantum",
-      "evidence": "hashes.SHA256(),",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_rsa.py",
       "line_number": 35,
       "language": "python",
       "matched_api": "from Crypto.PublicKey import RSA",
@@ -852,35 +696,11 @@
       "evidence": "from Crypto.PublicKey import RSA as _RSA",
       "detection_method": "regex",
       "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_rsa.py",
-      "line_number": 39,
-      "language": "python",
-      "matched_api": "RSA.generate(",
-      "algorithm": "RSA",
-      "risk_level": "HIGH",
-      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
-      "evidence": "key = _RSA.generate(2048)",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
-    },
-    {
-      "file_path": "snippet_rsa.py",
-      "line_number": 48,
-      "language": "python",
-      "matched_api": "RSA.import_key(",
-      "algorithm": "RSA",
-      "risk_level": "HIGH",
-      "replacement": "ML-KEM (key encapsulation) or ML-DSA (signatures)",
-      "evidence": "return _RSA.import_key(pem_data)",
-      "detection_method": "regex",
-      "confidence": "INFERRED"
     }
   ],
   "scanner_limitations": [
-    "Static analysis only: runtime-computed variables, dynamic class loaders, or network-retrieved keys cannot be evaluated statically.",
-    "Regex detection on Java and C may flag cryptographic identifiers in inactive comments or string literals.",
+    "Static analysis only: unresolved runtime values, dynamic class loaders, or network-retrieved keys cannot be resolved; AES inference is limited to explicit sizes, known generators, and unambiguous single local assignments.",
+    "Java and C comments are masked; string literals are preserved for algorithm parameters, so unrelated identifiers in strings may still match.",
     "AST scanning applies strictly to valid Python syntax; unparseable Python files report syntax error findings.",
     "AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed."
   ]
