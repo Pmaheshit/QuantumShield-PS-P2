@@ -136,6 +136,18 @@ private_key = ec.generate_private_key(ec.SECP256R1())
         assert findings[0].risk_level == RiskLevel.HIGH
         assert findings[0].matched_api == "ECC.generate"
 
+    @pytest.mark.parametrize(
+        "call",
+        (
+            "not_ec.generate_private_key(curve)",
+            "not_ECC.generate(curve='P-256')",
+        ),
+    )
+    def test_unrelated_names_do_not_match_ecc_generation(
+        self, ast_scanner: PythonAstScanner, call: str
+    ):
+        assert ast_scanner.scan_source(f"key = {call}\n") == []
+
     def test_explicit_ecdsa_and_ecdh_operations_keep_specific_labels(
         self, ast_scanner: PythonAstScanner
     ):

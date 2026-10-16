@@ -347,8 +347,15 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # Key generation alone does not establish whether an EC key is used for
         # signing or key agreement.
         if (
-            (attr == "generate_private_key" and ("ec" in base.lower() or base.endswith(".ec")))
-            or full_call.endswith("ec.generate_private_key")
+            (
+                attr == "generate_private_key"
+                and (
+                    base.casefold() == "ec"
+                    or base.casefold().endswith(".ec")
+                )
+            )
+            or full_call.casefold() == "ec.generate_private_key"
+            or full_call.casefold().endswith(".ec.generate_private_key")
         ):
             curve, confidence = self._extract_ec_curve(node)
             profile = self.classifier.get_profile("ECC")
@@ -413,7 +420,17 @@ class _CryptoAstVisitor(ast.NodeVisitor):
             return
 
         # PyCryptodome: ECC.generate(curve=...)
-        if (attr == "generate" and ("ECC" in base or base.endswith(".ECC"))) or full_call.endswith("ECC.generate"):
+        if (
+            (
+                attr == "generate"
+                and (
+                    base.casefold() == "ecc"
+                    or base.casefold().endswith(".ecc")
+                )
+            )
+            or full_call.casefold() == "ecc.generate"
+            or full_call.casefold().endswith(".ecc.generate")
+        ):
             curve, confidence = self._extract_ecc_curve_pycryptodome(node)
             profile = self.classifier.get_profile("ECC")
             self.findings.append(
