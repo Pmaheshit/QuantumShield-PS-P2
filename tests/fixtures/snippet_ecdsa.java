@@ -8,7 +8,7 @@ import java.security.*;
 import java.security.spec.*;
 import javax.crypto.*;
 
-public class CryptoExamples {
+class CryptoExamples {
 
     // ── RSA (HIGH risk) ────────────────────────────────────────────────────
     public static KeyPair generateRsaKeypair() throws NoSuchAlgorithmException {
