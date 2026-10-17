@@ -1,9 +1,9 @@
 # QuantumShield — PS-P2 Benchmark Evaluation Report
 
-**Timestamp:** `2026-10-16T16:36:41Z`<br>
-**Target Directory:** `C:\Users\DINESHBABU\QuantumShield-PS-P2\tests\fixtures`<br>
-**Runs per Mode:** 2 iterations<br>
-**Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.6)
+**Timestamp:** `2026-10-17T06:21:53Z`<br>
+**Target Directory:** `C:\Users\ASUS\QuantumShield-PS-P2\tests\fixtures`<br>
+**Runs per Mode:** 3 iterations<br>
+**Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.7)
 
 ## 1. Platform Configurations & Benchmark Architecture Status
 
@@ -24,21 +24,21 @@
 | **Files Failed** | 0 | 0 | 0 | 0 |
 | **Files Skipped** | 0 | 0 | 0 | 0 |
 | **Coverage Status** | verified | verified | verified | verified |
-| **True Positives (TP)** | 12 | 18 | 18 | 16 |
-| **False Positives (FP)** | 31 | 29 | 29 | 28 |
+| **True Positives (TP)** | 34 | 40 | 40 | 38 |
+| **False Positives (FP)** | 9 | 7 | 7 | 6 |
 | **False Negatives (FN)** | 6 | 0 | 0 | 2 |
-| **Precision** | 27.91% | 38.30% | 38.30% | 36.36% |
-| **Recall** | 66.67% | 100.00% | 100.00% | 88.89% |
-| **F1 Score** | 39.34% | 55.38% | 55.38% | 51.61% |
+| **Precision** | 79.07% | 85.11% | 85.11% | 86.36% |
+| **Recall** | 85.00% | 100.00% | 100.00% | 95.00% |
+| **F1 Score** | 81.93% | 91.95% | 91.95% | 90.48% |
 
 ## 3. Performance & Resource Comparison
 
 | Resource Metric | Regex Baseline | AST-Enriched | Platform B | Platform D |
 | :--- | :---: | :---: | :---: | :---: |
-| **Mean Scan Runtime** | 44.32 ms | 60.69 ms | 58.73 ms | 49.19 ms |
-| **Runtime Std Dev** | 1.98 ms | 1.20 ms | 0.01 ms | 1.74 ms |
-| **Min / Max Runtime** | 42.92 / 45.72 ms | 59.84 / 61.53 ms | 58.72 / 58.74 ms | 47.95 / 50.42 ms |
-| **Peak Memory Allocation (tracemalloc)** | 192.00 KB | 206.44 KB | 206.52 KB | 204.50 KB |
+| **Mean Scan Runtime** | 96.15 ms | 129.16 ms | 76.11 ms | 46.57 ms |
+| **Runtime Std Dev** | 19.69 ms | 44.54 ms | 23.17 ms | 3.67 ms |
+| **Min / Max Runtime** | 74.14 / 112.12 ms | 102.57 / 180.58 ms | 52.29 / 98.58 ms | 43.85 / 50.75 ms |
+| **Peak Memory Allocation (tracemalloc)** | 194.96 KB | 210.70 KB | 208.17 KB | 208.19 KB |
 
 ## 4. Benchmark Limitations
 

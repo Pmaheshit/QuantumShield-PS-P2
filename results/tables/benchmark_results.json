@@ -1,19 +1,19 @@
 {
   "metadata": {
     "benchmark_name": "QuantumShield PS-P2 Scanner Benchmark",
-    "timestamp_utc": "2026-10-16T16:36:41Z",
-    "target_directory": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\tests\\fixtures",
-    "runs_per_mode": 2,
+    "timestamp_utc": "2026-10-17T06:21:53Z",
+    "target_directory": "C:\\Users\\ASUS\\QuantumShield-PS-P2\\tests\\fixtures",
+    "runs_per_mode": 3,
     "line_match_tolerance": 0,
     "environment": {
       "platform_name": "Platform A (Local Workstation/Cloud Host)",
       "os_name": "Windows",
-      "os_version": "10.0.26200",
+      "os_version": "10.0.19045",
       "architecture": "AMD64",
-      "python_version": "3.14.6",
-      "cpu_count_logical": 14,
-      "cpu_count_physical": 14,
-      "total_ram_mb": 15811.94
+      "python_version": "3.14.7",
+      "cpu_count_logical": 4,
+      "cpu_count_physical": 2,
+      "total_ram_mb": 12026.99
     }
   },
   "platform_configurations_status": {
@@ -26,25 +26,26 @@
   "results": {
     "regex_only": {
       "mode": "regex_only",
-      "runs": 2,
+      "runs": 3,
       "run_times_ms": [
-        45.716,
-        42.923
+        74.145,
+        102.187,
+        112.119
       ],
-      "mean_time_ms": 44.32,
-      "min_time_ms": 42.923,
-      "max_time_ms": 45.716,
-      "stdev_time_ms": 1.975,
-      "peak_memory_kb": 192.0,
+      "mean_time_ms": 96.15,
+      "min_time_ms": 74.145,
+      "max_time_ms": 112.119,
+      "stdev_time_ms": 19.694,
+      "peak_memory_kb": 194.96,
       "accuracy": {
-        "total_expected": 18,
+        "total_expected": 40,
         "total_detected": 43,
-        "true_positives": 12,
-        "false_positives": 31,
+        "true_positives": 34,
+        "false_positives": 9,
         "false_negatives": 6,
-        "precision": 0.2791,
-        "recall": 0.6667,
-        "f1_score": 0.3934,
+        "precision": 0.7907,
+        "recall": 0.85,
+        "f1_score": 0.8193,
         "coverage_status": "verified"
       },
       "findings_count": 43,
@@ -95,25 +96,26 @@
     },
     "ast_enriched": {
       "mode": "ast_enriched",
-      "runs": 2,
+      "runs": 3,
       "run_times_ms": [
-        61.535,
-        59.835
+        180.576,
+        102.572,
+        104.32
       ],
-      "mean_time_ms": 60.685,
-      "min_time_ms": 59.835,
-      "max_time_ms": 61.535,
-      "stdev_time_ms": 1.202,
-      "peak_memory_kb": 206.44,
+      "mean_time_ms": 129.156,
+      "min_time_ms": 102.572,
+      "max_time_ms": 180.576,
+      "stdev_time_ms": 44.54,
+      "peak_memory_kb": 210.7,
       "accuracy": {
-        "total_expected": 18,
+        "total_expected": 40,
         "total_detected": 47,
-        "true_positives": 18,
-        "false_positives": 29,
+        "true_positives": 40,
+        "false_positives": 7,
         "false_negatives": 0,
-        "precision": 0.383,
+        "precision": 0.8511,
         "recall": 1.0,
-        "f1_score": 0.5538,
+        "f1_score": 0.9195,
         "coverage_status": "verified"
       },
       "findings_count": 47,
@@ -164,25 +166,26 @@
     },
     "platform_b": {
       "mode": "platform_b",
-      "runs": 2,
+      "runs": 3,
       "run_times_ms": [
-        58.723,
-        58.743
+        98.578,
+        77.47,
+        52.291
       ],
-      "mean_time_ms": 58.733,
-      "min_time_ms": 58.723,
-      "max_time_ms": 58.743,
-      "stdev_time_ms": 0.014,
-      "peak_memory_kb": 206.52,
+      "mean_time_ms": 76.113,
+      "min_time_ms": 52.291,
+      "max_time_ms": 98.578,
+      "stdev_time_ms": 23.173,
+      "peak_memory_kb": 208.17,
       "accuracy": {
-        "total_expected": 18,
+        "total_expected": 40,
         "total_detected": 47,
-        "true_positives": 18,
-        "false_positives": 29,
+        "true_positives": 40,
+        "false_positives": 7,
         "false_negatives": 0,
-        "precision": 0.383,
+        "precision": 0.8511,
         "recall": 1.0,
-        "f1_score": 0.5538,
+        "f1_score": 0.9195,
         "coverage_status": "verified"
       },
       "findings_count": 47,
@@ -233,25 +236,26 @@
     },
     "platform_d": {
       "mode": "platform_d",
-      "runs": 2,
+      "runs": 3,
       "run_times_ms": [
-        50.421,
-        47.955
+        50.748,
+        43.855,
+        45.099
       ],
-      "mean_time_ms": 49.188,
-      "min_time_ms": 47.955,
-      "max_time_ms": 50.421,
-      "stdev_time_ms": 1.744,
-      "peak_memory_kb": 204.5,
+      "mean_time_ms": 46.567,
+      "min_time_ms": 43.855,
+      "max_time_ms": 50.748,
+      "stdev_time_ms": 3.674,
+      "peak_memory_kb": 208.19,
       "accuracy": {
-        "total_expected": 18,
+        "total_expected": 40,
         "total_detected": 44,
-        "true_positives": 16,
-        "false_positives": 28,
+        "true_positives": 38,
+        "false_positives": 6,
         "false_negatives": 2,
-        "precision": 0.3636,
-        "recall": 0.8889,
-        "f1_score": 0.5161,
+        "precision": 0.8636,
+        "recall": 0.95,
+        "f1_score": 0.9048,
         "coverage_status": "verified"
       },
       "findings_count": 44,
@@ -302,17 +306,17 @@
     }
   },
   "comparison": {
-    "mean_runtime_delta_ms": 16.365,
-    "runtime_overhead_ratio": 1.37,
+    "mean_runtime_delta_ms": 33.006,
+    "runtime_overhead_ratio": 1.34,
     "false_positive_reduction": 2,
-    "precision_delta": 0.1039,
-    "recall_delta": 0.3333,
-    "f1_score_delta": 0.1604,
-    "platform_b_vs_ast_time_delta_ms": -1.952,
+    "precision_delta": 0.0604,
+    "recall_delta": 0.15,
+    "f1_score_delta": 0.1002,
+    "platform_b_vs_ast_time_delta_ms": -53.043,
     "platform_b_note": "Platform B runs same full-AST scan as Platform A on the host machine under max_workers=1 config. No OS virtualisation applied.",
-    "platform_d_vs_regex_time_delta_ms": 4.868,
-    "platform_d_vs_ast_time_delta_ms": -11.497,
-    "platform_d_precision_delta": 0.0845,
+    "platform_d_vs_regex_time_delta_ms": -49.583,
+    "platform_d_vs_ast_time_delta_ms": -82.589,
+    "platform_d_precision_delta": 0.0729,
     "platform_d_fp_reduction": 3
   }
 }
