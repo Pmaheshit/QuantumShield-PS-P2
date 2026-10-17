@@ -50,16 +50,46 @@ class InventoryReportGenerator:
     """
 
     LIMITATIONS = [
-        "Static analysis only: runtime-computed variables, dynamic class loaders, or network-retrieved keys cannot be evaluated statically.",
-        "Regex detection on Java and C may flag cryptographic identifiers in inactive comments or string literals.",
+        "Static analysis only: unresolved runtime values, dynamic class loaders, or network-retrieved keys cannot be resolved; AES inference is limited to explicit sizes, known generators, and unambiguous single local assignments.",
+        "Java and C comments are masked; string literals are preserved for algorithm parameters, so unrelated identifiers in strings may still match.",
         "AST scanning applies strictly to valid Python syntax; unparseable Python files report syntax error findings.",
-        "Conservative estimation: unknown AES key lengths default to AES-128 (MODERATE risk) per PS-P2 guidance.",
+        "AES findings with unresolved key lengths remain AES-UNKNOWN (UNKNOWN risk) by default; an explicitly enabled conservative AES-128 assumption is marked as assumed.",
     ]
 
-    def __init__(self, findings: Sequence[Finding], scanned_root: str = ".", total_files_scanned: int = 0) -> None:
+    def __init__(
+        self,
+        findings: Sequence[Finding],
+        scanned_root: str = ".",
+        total_files_scanned: int = 0,
+        files_discovered: Optional[int] = None,
+        files_failed: int = 0,
+        files_skipped: int = 0,
+    ) -> None:
         self.findings = list(findings)
         self.scanned_root = scanned_root
         self.total_files_scanned = total_files_scanned
+        self.files_discovered = (
+            files_discovered
+            if files_discovered is not None
+            else total_files_scanned + files_failed + files_skipped
+        )
+        self.files_failed = files_failed
+        self.files_skipped = files_skipped
+        if min(
+            self.total_files_scanned,
+            self.files_discovered,
+            self.files_failed,
+            self.files_skipped,
+        ) < 0:
+            raise ValueError("Inventory file counts cannot be negative.")
+        accounted_files = (
+            self.total_files_scanned + self.files_failed + self.files_skipped
+        )
+        if self.files_discovered != accounted_files:
+            raise ValueError(
+                "Inventory file counts must account for every discovered file "
+                f"({self.files_discovered} discovered, {accounted_files} accounted)."
+            )
         self.timestamp = datetime.now(timezone.utc).isoformat()
         self.classifier = RiskClassifier()
 
@@ -98,12 +128,14 @@ class InventoryReportGenerator:
             }
 
             # If AST specific fields exist
-            if hasattr(f, "key_size") and f.key_size is not None:
+            if hasattr(f, "key_size"):
                 f_dict["key_size"] = f.key_size
             if hasattr(f, "curve") and f.curve is not None:
                 f_dict["curve"] = f.curve
             if hasattr(f, "parameters") and f.parameters:
                 f_dict["parameters"] = f.parameters
+            if hasattr(f, "assumed_default"):
+                f_dict["assumed_default"] = f.assumed_default
             if hasattr(f, "details") and f.details:
                 f_dict["details"] = f.details
 
@@ -116,6 +148,9 @@ class InventoryReportGenerator:
                 "timestamp_utc": self.timestamp,
                 "scanned_root": self.scanned_root,
                 "total_files_scanned": self.total_files_scanned,
+                "files_discovered": self.files_discovered,
+                "files_failed": self.files_failed,
+                "files_skipped": self.files_skipped,
                 "total_findings": len(self.findings),
             },
             "summary": {
@@ -142,7 +177,10 @@ class InventoryReportGenerator:
         lines.append("")
         lines.append(f"**Generated:** `{meta['timestamp_utc']}`<br>")
         lines.append(f"**Target Directory:** `{meta['scanned_root']}`<br>")
+        lines.append(f"**Files Discovered:** {meta['files_discovered']}<br>")
         lines.append(f"**Files Scanned:** {meta['total_files_scanned']}<br>")
+        lines.append(f"**Files Failed:** {meta['files_failed']}<br>")
+        lines.append(f"**Files Skipped:** {meta['files_skipped']}<br>")
         lines.append(f"**Total Cryptographic Findings:** {meta['total_findings']}")
         lines.append("")
 
@@ -151,10 +189,10 @@ class InventoryReportGenerator:
         lines.append("")
         lines.append("| Risk Level | Count | Threat Rationale | Migration Priority |")
         lines.append("| :--- | :---: | :--- | :--- |")
-        lines.append(f"| 🔴 **HIGH** | {summary['findings_by_risk'].get('HIGH', 0)} | Vulnerable to Shor's Algorithm (RSA / ECC broken) | Immediate (Phase 1 Target) |")
+        lines.append(f"| 🔴 **HIGH** | {summary['findings_by_risk'].get('HIGH', 0)} | RSA/ECC operations may be exposed to Shor's algorithm; API matches do not establish system-level exposure. | Prioritize operation review |")
         lines.append(f"| 🟡 **MODERATE** | {summary['findings_by_risk'].get('MODERATE', 0)} | Key space halved by Grover's Algorithm (AES-128) | Medium (Upgrade to AES-256) |")
         lines.append(f"| 🟢 **LOWER** | {summary['findings_by_risk'].get('LOWER', 0)} | Quantum-resistant symmetric baseline (AES-256, SHA-256) | Low / Retain current baseline |")
-        lines.append(f"| ⚪ **UNKNOWN** | {summary['findings_by_risk'].get('UNKNOWN', 0)} | Unrecognized / Unparseable source element | Requires manual review |")
+        lines.append(f"| ⚪ **UNKNOWN** | {summary['findings_by_risk'].get('UNKNOWN', 0)} | Unresolved algorithm or key size, or unparseable source element | Requires manual review |")
         lines.append("")
 
         # ── Language & Algorithm breakdown ──
@@ -187,6 +225,8 @@ class InventoryReportGenerator:
             path_loc = f"`{f['file_path']}:{f['line_number']}`"
             method = f['detection_method']
             conf = f.get('confidence', 'INFERRED')
+            if f.get("assumed_default", False):
+                conf = f"{conf} (assumed default)"
             lines.append(
                 f"| {idx} | {path_loc} | `{f['language']}` | **{f['algorithm']}** | `{f['risk_level']}` | `{method}` | `{conf}` | {f['replacement']} |"
             )
@@ -200,6 +240,8 @@ class InventoryReportGenerator:
             lines.append(f"- **Detection Method:** `{f['detection_method']}` (Confidence: `{f['confidence']}`)")
             if "key_size" in f and f["key_size"]:
                 lines.append(f"- **Static Key Size:** {f['key_size']} bits")
+            if f.get("assumed_default", False):
+                lines.append("- **Assumed Default:** AES-128 reported without a statically established key size.")
             if "curve" in f and f["curve"]:
                 lines.append(f"- **Elliptic Curve:** `{f['curve']}`")
             if "details" in f and f["details"]:

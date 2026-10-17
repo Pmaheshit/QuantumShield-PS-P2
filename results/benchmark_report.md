@@ -1,9 +1,9 @@
 # QuantumShield — PS-P2 Benchmark Evaluation Report
 
-**Timestamp:** `2026-10-14T10:58:42Z`<br>
-**Target Directory:** `C:\Users\ASUS\Desktop\QuantumShield-PS-P2\tests\fixtures`<br>
-**Runs per Mode:** 10 iterations<br>
-**Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.7)
+**Timestamp:** `2026-10-16T16:36:41Z`<br>
+**Target Directory:** `C:\Users\DINESHBABU\QuantumShield-PS-P2\tests\fixtures`<br>
+**Runs per Mode:** 2 iterations<br>
+**Platform:** Platform A (Local Workstation/Cloud Host) (Windows AMD64, Python 3.14.6)
 
 ## 1. Platform Configurations & Benchmark Architecture Status
 
@@ -12,27 +12,33 @@
 - **Platform C (IoT/Embedded):** Reserved for Phase 2 continuation.
 - **Platform D (Custom Innovation):** Selective High-Risk AST Scanner — AST parse only for files   with asymmetric (HIGH-risk) patterns; fast regex for symmetric-only files.    Per-file input-size boundary at 64 MB (not an OS-level process heap limit).
 - **Ground Truth Note:** Evaluated only against fixtures present in the scanned directory.   Organizers' planted sample repository is withheld until judging.
+- **Ground Truth Matching:** Exact source line and algorithm name (case-insensitive).
 
 ## 2. Accuracy Comparison (Precision / Recall / F1)
 
 | Metric | Regex Baseline (Layer 1) | AST-Enriched (Layer 2) | Platform B (Constrained Server) | Platform D (Custom Innovation) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Total Findings Detected** | 68 | 47 | 47 | 60 |
-| **True Positives (TP)** | 13 | 17 | 17 | 18 |
-| **False Positives (FP)** | 55 | 30 | 30 | 42 |
-| **False Negatives (FN)** | 5 | 1 | 1 | 0 |
-| **Precision** | 19.12% | 36.17% | 36.17% | 30.00% |
-| **Recall** | 72.22% | 94.44% | 94.44% | 100.00% |
-| **F1 Score** | 30.23% | 52.31% | 52.31% | 46.15% |
+| **Total Findings Detected** | 43 | 47 | 47 | 44 |
+| **Files Discovered** | 7 | 7 | 7 | 7 |
+| **Files Scanned** | 7 | 7 | 7 | 7 |
+| **Files Failed** | 0 | 0 | 0 | 0 |
+| **Files Skipped** | 0 | 0 | 0 | 0 |
+| **Coverage Status** | verified | verified | verified | verified |
+| **True Positives (TP)** | 12 | 18 | 18 | 16 |
+| **False Positives (FP)** | 31 | 29 | 29 | 28 |
+| **False Negatives (FN)** | 6 | 0 | 0 | 2 |
+| **Precision** | 27.91% | 38.30% | 38.30% | 36.36% |
+| **Recall** | 66.67% | 100.00% | 100.00% | 88.89% |
+| **F1 Score** | 39.34% | 55.38% | 55.38% | 51.61% |
 
 ## 3. Performance & Resource Comparison
 
 | Resource Metric | Regex Baseline | AST-Enriched | Platform B | Platform D |
 | :--- | :---: | :---: | :---: | :---: |
-| **Mean Scan Runtime** | 18.20 ms | 18.52 ms | 18.76 ms | 18.96 ms |
-| **Runtime Std Dev** | 1.42 ms | 1.06 ms | 1.37 ms | 2.31 ms |
-| **Min / Max Runtime** | 16.76 / 20.98 ms | 17.80 / 21.43 ms | 17.38 / 21.59 ms | 17.26 / 24.43 ms |
-| **Peak Memory Allocation (tracemalloc)** | 185.99 KB | 209.10 KB | 200.32 KB | 205.34 KB |
+| **Mean Scan Runtime** | 44.32 ms | 60.69 ms | 58.73 ms | 49.19 ms |
+| **Runtime Std Dev** | 1.98 ms | 1.20 ms | 0.01 ms | 1.74 ms |
+| **Min / Max Runtime** | 42.92 / 45.72 ms | 59.84 / 61.53 ms | 58.72 / 58.74 ms | 47.95 / 50.42 ms |
+| **Peak Memory Allocation (tracemalloc)** | 192.00 KB | 206.44 KB | 206.52 KB | 204.50 KB |
 
 ## 4. Benchmark Limitations
 

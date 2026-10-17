@@ -7,6 +7,7 @@ post-quantum replacement, following the exact taxonomy specified in PS-P2:
   RSA / Elliptic-Curve  →  HIGH     (broken by Shor's algorithm)
   AES-128               →  MODERATE (key space halved by Grover's algorithm)
   AES-256 / SHA-256     →  LOWER    (Grover's impact marginal at this size)
+  AES-192 / AES-UNKNOWN →  UNKNOWN  (no project risk policy is defined)
 
 Reference: Problem_Statment_Details.pdf, Page 14–15 (PS-P2 baseline task).
 """
@@ -67,7 +68,10 @@ _PROFILES: dict[str, RiskProfile] = {
         algorithm="ECC",
         level=RiskLevel.HIGH,
         reason="Shor's algorithm solves the elliptic-curve discrete-log problem.",
-        replacement="ML-KEM (FIPS 203) or ML-DSA (FIPS 204)",
+        replacement=(
+            "Choose ML-KEM (FIPS 203) for key establishment or "
+            "ML-DSA (FIPS 204) for signatures based on the actual use"
+        ),
     ),
 
     # ── MODERATE-risk (Grover's algorithm) ───────────────────────────────────
@@ -79,6 +83,18 @@ _PROFILES: dict[str, RiskProfile] = {
             "128-bit security to ~64-bit – below the 128-bit post-quantum security target."
         ),
         replacement="Upgrade to AES-256",
+    ),
+    "AES-192": RiskProfile(
+        algorithm="AES-192",
+        level=RiskLevel.UNKNOWN,
+        reason="AES-192 is identified, but no project risk policy is defined for this key size.",
+        replacement="Manual review required",
+    ),
+    "AES-UNKNOWN": RiskProfile(
+        algorithm="AES-UNKNOWN",
+        level=RiskLevel.UNKNOWN,
+        reason="AES was identified, but its key size could not be determined.",
+        replacement="Determine the AES key size before assigning a risk level",
     ),
 
     # ── LOWER-risk (Grover's impact marginal) ────────────────────────────────
@@ -121,7 +137,7 @@ _ALIASES: dict[str, str] = {
     # ECDSA / EC variants
     "ecdsa":               "ECDSA",
     "ecdh":                "ECDH",
-    "ec":                  "ECDSA",
+    "ec":                  "ECC",
     "ecc":                 "ECC",
     "elliptic-curve":      "ECC",
     "elliptic curve":      "ECC",
@@ -214,5 +230,4 @@ class RiskClassifier:
     def get_profile(self, algorithm: str, purpose: Optional[str] = None) -> RiskProfile:
         """Alias for classify()."""
         return self.classify(algorithm, purpose=purpose)
-
 

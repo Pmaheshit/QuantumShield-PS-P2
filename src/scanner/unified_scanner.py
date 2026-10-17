@@ -15,14 +15,16 @@ Workflow:
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
+import io
+import re
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+import tokenize
+from typing import Any, Iterator, Optional
 
 from .ast_scanner import AstFinding, PythonAstScanner
 from .regex_scanner import Finding, RegexScanner, _SKIP_DIRS
-from .risk_classifier import RiskClassifier, RiskLevel
+from .risk_classifier import RiskClassifier
+from .scan_result import FileScanOutcome, ScanResult
 
 
 class UnifiedScanner:
@@ -51,26 +53,64 @@ class UnifiedScanner:
         Execute scan across all files in root.
         Returns unified list of findings.
         """
+        return self.scan_with_outcomes().findings
+
+    def scan_with_outcomes(self) -> ScanResult:
+        """Run the scan and return one explicit outcome per discovered file."""
         findings: list[Finding] = []
+        outcomes: list[FileScanOutcome] = []
         scanned_files = list(self._iter_source_files())
 
         for file_path, language in scanned_files:
-            rel_path = str(file_path.relative_to(self.root)) if self.root.is_dir() else file_path.name
-
+            relative_path = self.regex_scanner._relative(file_path)
             if language == "python" and self.use_ast_for_python:
-                # Use AST scanner
-                ast_findings = self.ast_scanner.scan_file(file_path, relative_to=self.root)
-                # If AST encountered a syntax error or produced 0 findings on an unparseable file,
-                # we retain the AST findings (which records the error or findings).
-                # In addition, if code has standard calls not yet mapped in AST, regex can supplement.
-                # However, AST eliminates comment false positives!
+                ast_findings, ast_outcome = self.ast_scanner.scan_file_with_outcome(
+                    file_path,
+                    relative_to=self.root,
+                )
                 findings.extend(ast_findings)
+
+                regex_findings, regex_outcome = self.regex_scanner._scan_file_with_outcome(
+                    file_path,
+                    language,
+                )
+                _, code_error = self._python_code_lines_with_error(file_path)
+                for regex_finding in regex_findings:
+                    if self._represented_by_ast(regex_finding, ast_findings):
+                        continue
+                    findings.append(regex_finding)
+                errors = [
+                    outcome.reason
+                    for outcome in (ast_outcome, regex_outcome)
+                    if outcome.status == "failed"
+                ]
+                if code_error:
+                    errors.append(code_error)
+                outcomes.append(
+                    FileScanOutcome(
+                        relative_path,
+                        "failed" if errors else "scanned",
+                        "; ".join(errors),
+                    )
+                )
             else:
                 # Regex scanner for Java, C, and non-AST Python
-                regex_findings = self.regex_scanner._scan_file(file_path, language)
+                regex_findings, outcome = self.regex_scanner._scan_file_with_outcome(
+                    file_path,
+                    language,
+                )
                 findings.extend(regex_findings)
+                outcomes.append(outcome)
 
-        return findings
+        discovered_paths = tuple(
+            self.regex_scanner._relative(file_path)
+            for file_path, _ in scanned_files
+        )
+        return ScanResult(
+            findings=findings,
+            outcomes=outcomes,
+            discovered_files=discovered_paths,
+        )
 
     def scan_comparison(self) -> dict[str, Any]:
         """
@@ -95,3 +135,69 @@ class UnifiedScanner:
 
     def _iter_source_files(self) -> Iterator[tuple[Path, str]]:
         return self.regex_scanner._iter_source_files()
+
+    @staticmethod
+    def _python_code_lines_with_error(
+        file_path: Path,
+    ) -> tuple[Optional[list[str]], str]:
+        """Return masked source lines or the read/tokenization error."""
+        try:
+            source = file_path.read_text(encoding="utf-8", errors="replace")
+            lines = source.splitlines(keepends=True)
+            for token in tokenize.generate_tokens(io.StringIO(source).readline):
+                if token.type not in (tokenize.COMMENT, tokenize.STRING):
+                    continue
+                start_line, start_column = token.start
+                end_line, end_column = token.end
+                for line_number in range(start_line, end_line + 1):
+                    line_text = lines[line_number - 1]
+                    line = list(line_text)
+                    start = start_column if line_number == start_line else 0
+                    end = end_column if line_number == end_line else len(line_text.rstrip("\r\n"))
+                    for column in range(start, min(end, len(line))):
+                        if line[column] not in "\r\n":
+                            line[column] = " "
+                    lines[line_number - 1] = "".join(line)
+            return [line.rstrip("\r\n") for line in lines], ""
+        except (OSError, IndentationError, SyntaxError, tokenize.TokenError) as exc:
+            return None, str(exc)
+
+    @staticmethod
+    def _represented_by_ast(finding: Finding, ast_findings: list[AstFinding]) -> bool:
+        if finding._source_column is None or finding._source_end_column is None:
+            return False
+
+        def api_identity(api: str) -> str:
+            api = re.sub(r"\s+", "", api).split("(", 1)[0].rstrip(".")
+            return api.casefold()
+
+        regex_api = api_identity(finding.matched_api)
+        for ast_finding in ast_findings:
+            if (
+                ast_finding.file_path == finding.file_path
+                and ast_finding.line_number == finding.line_number
+                and ast_finding._source_column is not None
+                and ast_finding._source_end_column is not None
+            ):
+                ast_api = api_identity(ast_finding.matched_api)
+                api_related = (
+                    ast_api == regex_api
+                    or ast_api.endswith("." + regex_api)
+                    or regex_api.endswith("." + ast_api)
+                )
+                ranges_overlap = (
+                    finding._source_column < ast_finding._source_end_column
+                    and ast_finding._source_column < finding._source_end_column
+                )
+            else:
+                continue
+
+            same_algorithm = ast_finding.algorithm == finding.algorithm
+            confirmed_aes_variant = (
+                finding.algorithm.startswith("AES-")
+                and ast_finding.algorithm in {"AES-128", "AES-192", "AES-256"}
+                and ast_finding.confidence == "CONFIRMED"
+            )
+            if api_related and ranges_overlap and (same_algorithm or confirmed_aes_variant):
+                return True
+        return False

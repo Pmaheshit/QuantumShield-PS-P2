@@ -1,18 +1,19 @@
 {
   "metadata": {
     "benchmark_name": "QuantumShield PS-P2 Scanner Benchmark",
-    "timestamp_utc": "2026-10-14T10:58:42Z",
-    "target_directory": "C:\\Users\\ASUS\\Desktop\\QuantumShield-PS-P2\\tests\\fixtures",
-    "runs_per_mode": 10,
+    "timestamp_utc": "2026-10-16T16:36:41Z",
+    "target_directory": "C:\\Users\\DINESHBABU\\QuantumShield-PS-P2\\tests\\fixtures",
+    "runs_per_mode": 2,
+    "line_match_tolerance": 0,
     "environment": {
       "platform_name": "Platform A (Local Workstation/Cloud Host)",
       "os_name": "Windows",
-      "os_version": "10.0.19045",
+      "os_version": "10.0.26200",
       "architecture": "AMD64",
-      "python_version": "3.14.7",
-      "cpu_count_logical": 4,
-      "cpu_count_physical": 2,
-      "total_ram_mb": 12026.99
+      "python_version": "3.14.6",
+      "cpu_count_logical": 14,
+      "cpu_count_physical": 14,
+      "total_ram_mb": 15811.94
     }
   },
   "platform_configurations_status": {
@@ -25,145 +26,293 @@
   "results": {
     "regex_only": {
       "mode": "regex_only",
-      "runs": 10,
+      "runs": 2,
       "run_times_ms": [
-        20.105,
-        18.218,
-        17.523,
-        17.094,
-        17.294,
-        18.861,
-        20.983,
-        18.292,
-        16.907,
-        16.757
+        45.716,
+        42.923
       ],
-      "mean_time_ms": 18.203,
-      "min_time_ms": 16.757,
-      "max_time_ms": 20.983,
-      "stdev_time_ms": 1.417,
-      "peak_memory_kb": 185.99,
+      "mean_time_ms": 44.32,
+      "min_time_ms": 42.923,
+      "max_time_ms": 45.716,
+      "stdev_time_ms": 1.975,
+      "peak_memory_kb": 192.0,
       "accuracy": {
         "total_expected": 18,
-        "total_detected": 68,
-        "true_positives": 13,
-        "false_positives": 55,
-        "false_negatives": 5,
-        "precision": 0.1912,
-        "recall": 0.7222,
-        "f1_score": 0.3023
+        "total_detected": 43,
+        "true_positives": 12,
+        "false_positives": 31,
+        "false_negatives": 6,
+        "precision": 0.2791,
+        "recall": 0.6667,
+        "f1_score": 0.3934,
+        "coverage_status": "verified"
       },
-      "findings_count": 68
+      "findings_count": 43,
+      "scan_coverage": {
+        "files_discovered": 7,
+        "files_scanned": 7,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "snippet_aes.c",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_aes.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_clean.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecc.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecdsa.java",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_edge_cases.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_rsa.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
     },
     "ast_enriched": {
       "mode": "ast_enriched",
-      "runs": 10,
+      "runs": 2,
       "run_times_ms": [
-        21.428,
-        18.857,
-        18.03,
-        18.072,
-        18.099,
-        17.803,
-        18.339,
-        18.087,
-        18.259,
-        18.23
+        61.535,
+        59.835
       ],
-      "mean_time_ms": 18.52,
-      "min_time_ms": 17.803,
-      "max_time_ms": 21.428,
-      "stdev_time_ms": 1.058,
-      "peak_memory_kb": 209.1,
+      "mean_time_ms": 60.685,
+      "min_time_ms": 59.835,
+      "max_time_ms": 61.535,
+      "stdev_time_ms": 1.202,
+      "peak_memory_kb": 206.44,
       "accuracy": {
         "total_expected": 18,
         "total_detected": 47,
-        "true_positives": 17,
-        "false_positives": 30,
-        "false_negatives": 1,
-        "precision": 0.3617,
-        "recall": 0.9444,
-        "f1_score": 0.5231
+        "true_positives": 18,
+        "false_positives": 29,
+        "false_negatives": 0,
+        "precision": 0.383,
+        "recall": 1.0,
+        "f1_score": 0.5538,
+        "coverage_status": "verified"
       },
-      "findings_count": 47
+      "findings_count": 47,
+      "scan_coverage": {
+        "files_discovered": 7,
+        "files_scanned": 7,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "snippet_aes.c",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_aes.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_clean.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecc.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecdsa.java",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_edge_cases.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_rsa.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
     },
     "platform_b": {
       "mode": "platform_b",
-      "runs": 10,
+      "runs": 2,
       "run_times_ms": [
-        18.428,
-        17.666,
-        17.375,
-        17.732,
-        19.59,
-        20.199,
-        21.593,
-        19.189,
-        18.225,
-        17.624
+        58.723,
+        58.743
       ],
-      "mean_time_ms": 18.762,
-      "min_time_ms": 17.375,
-      "max_time_ms": 21.593,
-      "stdev_time_ms": 1.367,
-      "peak_memory_kb": 200.32,
+      "mean_time_ms": 58.733,
+      "min_time_ms": 58.723,
+      "max_time_ms": 58.743,
+      "stdev_time_ms": 0.014,
+      "peak_memory_kb": 206.52,
       "accuracy": {
         "total_expected": 18,
         "total_detected": 47,
-        "true_positives": 17,
-        "false_positives": 30,
-        "false_negatives": 1,
-        "precision": 0.3617,
-        "recall": 0.9444,
-        "f1_score": 0.5231
+        "true_positives": 18,
+        "false_positives": 29,
+        "false_negatives": 0,
+        "precision": 0.383,
+        "recall": 1.0,
+        "f1_score": 0.5538,
+        "coverage_status": "verified"
       },
-      "findings_count": 47
+      "findings_count": 47,
+      "scan_coverage": {
+        "files_discovered": 7,
+        "files_scanned": 7,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "snippet_aes.c",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_aes.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_clean.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecc.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecdsa.java",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_edge_cases.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_rsa.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
     },
     "platform_d": {
       "mode": "platform_d",
-      "runs": 10,
+      "runs": 2,
       "run_times_ms": [
-        17.258,
-        17.696,
-        17.407,
-        17.554,
-        17.49,
-        19.067,
-        24.432,
-        17.991,
-        21.455,
-        19.207
+        50.421,
+        47.955
       ],
-      "mean_time_ms": 18.956,
-      "min_time_ms": 17.258,
-      "max_time_ms": 24.432,
-      "stdev_time_ms": 2.315,
-      "peak_memory_kb": 205.34,
+      "mean_time_ms": 49.188,
+      "min_time_ms": 47.955,
+      "max_time_ms": 50.421,
+      "stdev_time_ms": 1.744,
+      "peak_memory_kb": 204.5,
       "accuracy": {
         "total_expected": 18,
-        "total_detected": 60,
-        "true_positives": 18,
-        "false_positives": 42,
-        "false_negatives": 0,
-        "precision": 0.3,
-        "recall": 1.0,
-        "f1_score": 0.4615
+        "total_detected": 44,
+        "true_positives": 16,
+        "false_positives": 28,
+        "false_negatives": 2,
+        "precision": 0.3636,
+        "recall": 0.8889,
+        "f1_score": 0.5161,
+        "coverage_status": "verified"
       },
-      "findings_count": 60
+      "findings_count": 44,
+      "scan_coverage": {
+        "files_discovered": 7,
+        "files_scanned": 7,
+        "files_failed": 0,
+        "scanner_errors": 0,
+        "files_skipped": 0,
+        "outcomes": [
+          {
+            "file_path": "snippet_aes.c",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_aes.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_clean.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecc.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_ecdsa.java",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_edge_cases.py",
+            "status": "scanned",
+            "reason": ""
+          },
+          {
+            "file_path": "snippet_rsa.py",
+            "status": "scanned",
+            "reason": ""
+          }
+        ]
+      }
     }
   },
   "comparison": {
-    "mean_runtime_delta_ms": 0.317,
-    "runtime_overhead_ratio": 1.02,
-    "false_positive_reduction": 25,
-    "precision_delta": 0.1705,
-    "recall_delta": 0.2222,
-    "f1_score_delta": 0.2208,
-    "platform_b_vs_ast_time_delta_ms": 0.242,
+    "mean_runtime_delta_ms": 16.365,
+    "runtime_overhead_ratio": 1.37,
+    "false_positive_reduction": 2,
+    "precision_delta": 0.1039,
+    "recall_delta": 0.3333,
+    "f1_score_delta": 0.1604,
+    "platform_b_vs_ast_time_delta_ms": -1.952,
     "platform_b_note": "Platform B runs same full-AST scan as Platform A on the host machine under max_workers=1 config. No OS virtualisation applied.",
-    "platform_d_vs_regex_time_delta_ms": 0.753,
-    "platform_d_vs_ast_time_delta_ms": 0.436,
-    "platform_d_precision_delta": 0.1088,
-    "platform_d_fp_reduction": 13
+    "platform_d_vs_regex_time_delta_ms": 4.868,
+    "platform_d_vs_ast_time_delta_ms": -11.497,
+    "platform_d_precision_delta": 0.0845,
+    "platform_d_fp_reduction": 3
   }
 }

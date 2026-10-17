@@ -63,6 +63,42 @@ def sample_findings() -> list[Finding]:
 
 
 class TestInventoryReportGenerator:
+    def test_file_outcome_counts_are_explicit_and_backward_compatible(
+        self, sample_findings
+    ):
+        generator = InventoryReportGenerator(
+            sample_findings,
+            scanned_root="test_repo",
+            total_files_scanned=2,
+            files_discovered=4,
+            files_failed=1,
+            files_skipped=1,
+        )
+
+        metadata = generator.generate_json_dict()["metadata"]
+        assert metadata["total_files_scanned"] == 2
+        assert metadata["files_discovered"] == 4
+        assert metadata["files_failed"] == 1
+        assert metadata["files_skipped"] == 1
+
+        legacy_metadata = InventoryReportGenerator(
+            sample_findings, total_files_scanned=3
+        ).generate_json_dict()["metadata"]
+        assert legacy_metadata["total_files_scanned"] == 3
+        assert legacy_metadata["files_discovered"] == 3
+        assert legacy_metadata["files_failed"] == 0
+        assert legacy_metadata["files_skipped"] == 0
+
+    def test_inconsistent_file_counts_are_rejected(self):
+        with pytest.raises(ValueError, match="account for every discovered file"):
+            InventoryReportGenerator(
+                [],
+                total_files_scanned=2,
+                files_discovered=3,
+                files_failed=0,
+                files_skipped=0,
+            )
+
     def test_json_structure_and_keys(self, sample_findings):
         gen = InventoryReportGenerator(sample_findings, scanned_root="test_repo", total_files_scanned=10)
         json_data = gen.generate_json_dict()
@@ -119,3 +155,64 @@ class TestInventoryReportGenerator:
         raw_key = "key = b'0123456789abcdef0123456789abcdef'"
         cleaned = sanitize_evidence(raw_key)
         assert "[REDACTED_HEX_KEY]" in cleaned
+
+    def test_unknown_aes_variant_is_preserved_in_json_and_markdown(self):
+        finding = AstFinding(
+            file_path="src/crypto.py",
+            line_number=7,
+            language="python",
+            matched_api="AES.new",
+            algorithm="AES-UNKNOWN",
+            risk_level=RiskLevel.UNKNOWN,
+            replacement="Determine the AES key size before assigning a risk level",
+            evidence="cipher = AES.new(key_from_kms, AES.MODE_GCM)",
+            detection_method="ast",
+            confidence="INFERRED",
+            key_size=None,
+            parameters={"key_bits": None},
+            assumed_default=False,
+            details="AES cipher construction with unknown key size",
+        )
+        generator = InventoryReportGenerator([finding])
+
+        serialized = json.loads(generator.generate_json())
+        report_finding = serialized["findings"][0]
+        markdown = generator.generate_markdown()
+
+        assert report_finding["algorithm"] == "AES-UNKNOWN"
+        assert report_finding["risk_level"] == RiskLevel.UNKNOWN
+        assert report_finding["key_size"] is None
+        assert report_finding["assumed_default"] is False
+        assert serialized["summary"]["findings_by_algorithm"] == {"AES-UNKNOWN": 1}
+        assert "| **AES-UNKNOWN** | `UNKNOWN` | 1 |" in markdown
+        assert "**AES-UNKNOWN**" in markdown
+        assert "| **AES-UNKNOWN** | `MODERATE` |" not in markdown
+        assert "| **AES-UNKNOWN** | `LOWER` |" not in markdown
+        assert "remain AES-UNKNOWN" in markdown
+
+    def test_conservative_aes_assumption_is_visible_in_reports(self):
+        finding = AstFinding(
+            file_path="src/crypto.py",
+            line_number=7,
+            language="python",
+            matched_api="AES.new",
+            algorithm="AES-128",
+            risk_level=RiskLevel.MODERATE,
+            replacement="Upgrade to AES-256",
+            evidence="cipher = AES.new(key_from_kms, AES.MODE_GCM)",
+            detection_method="ast",
+            confidence="INFERRED",
+            key_size=None,
+            assumed_default=True,
+            details="AES cipher construction; reported as inferred AES-128 by conservative default",
+        )
+        generator = InventoryReportGenerator([finding])
+
+        report_finding = json.loads(generator.generate_json())["findings"][0]
+        markdown = generator.generate_markdown()
+
+        assert report_finding["algorithm"] == "AES-128"
+        assert report_finding["key_size"] is None
+        assert report_finding["assumed_default"] is True
+        assert "INFERRED (assumed default)" in markdown
+        assert "AES-128 reported without a statically established key size" in markdown

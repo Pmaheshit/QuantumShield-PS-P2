@@ -23,6 +23,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .regex_scanner import Finding
 from .risk_classifier import RiskClassifier, RiskLevel
+from .scan_result import FileScanOutcome
+
+
+# Competition-rule switch: enable only if rules require conservative AES-128
+# reporting when the key size cannot be determined.
+CONSERVATIVE_AES_DEFAULT = False
 
 
 @dataclass
@@ -36,6 +42,7 @@ class AstFinding(Finding):
     confidence: str = "CONFIRMED"  # "CONFIRMED" | "INFERRED" | "UNKNOWN"
     key_size: Optional[int] = None
     curve: Optional[str] = None
+    assumed_default: bool = False
     details: str = ""
 
     def to_dict(self) -> dict:
@@ -44,6 +51,7 @@ class AstFinding(Finding):
         d["confidence"] = self.confidence
         d["key_size"] = self.key_size
         d["curve"] = self.curve
+        d["assumed_default"] = self.assumed_default
         d["details"] = self.details
         return d
 
@@ -89,12 +97,19 @@ class PythonAstScanner:
 
     def scan_file(self, path: str | Path, relative_to: Optional[str | Path] = None) -> list[AstFinding]:
         """Scan a Python file on disk."""
+        findings, _ = self.scan_file_with_outcome(path, relative_to=relative_to)
+        return findings
+
+    def scan_file_with_outcome(
+        self, path: str | Path, relative_to: Optional[str | Path] = None
+    ) -> tuple[list[AstFinding], FileScanOutcome]:
+        """Scan a Python file and return its processing outcome separately."""
         p = Path(path).resolve()
         rel_path = str(p.relative_to(Path(relative_to).resolve())) if relative_to else p.name
 
         try:
             code = p.read_text(encoding="utf-8", errors="replace")
-        except Exception as exc:
+        except OSError as exc:
             return [
                 AstFinding(
                     file_path=rel_path,
@@ -109,9 +124,13 @@ class PythonAstScanner:
                     confidence="UNKNOWN",
                     details=f"Read error: {exc}",
                 )
-            ]
+            ], FileScanOutcome(rel_path, "failed", str(exc))
 
-        return self.scan_source(code, file_path=rel_path)
+        findings = self.scan_source(code, file_path=rel_path)
+        syntax_errors = [finding for finding in findings if finding.detection_method == "ast_error"]
+        if syntax_errors:
+            return findings, FileScanOutcome(rel_path, "failed", syntax_errors[0].details)
+        return findings, FileScanOutcome(rel_path, "scanned")
 
 
 class _CryptoAstVisitor(ast.NodeVisitor):
@@ -128,6 +147,76 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # Track imports: local_alias -> full_qualified_name
         # e.g., "from cryptography.hazmat.primitives.asymmetric import rsa as my_rsa" -> "my_rsa": "rsa"
         self.aliases: dict[str, str] = {}
+        self._key_byte_lengths: dict[str, tuple[tuple[int, int], int]] = {}
+
+    def _visit_scoped_node(self, node: ast.AST) -> None:
+        outer_key_lengths = self._key_byte_lengths
+        self._key_byte_lengths = {}
+        self._key_byte_lengths = self._collect_local_key_lengths(node)
+        try:
+            self.generic_visit(node)
+        finally:
+            self._key_byte_lengths = outer_key_lengths
+
+    def _collect_local_key_lengths(
+        self, node: ast.AST
+    ) -> dict[str, tuple[tuple[int, int], int]]:
+        assignment_counts: dict[str, int] = {}
+        declared_outer_names: set[str] = set()
+        for child in ast.walk(node):
+            if isinstance(child, ast.Name) and isinstance(
+                child.ctx, (ast.Store, ast.Del)
+            ):
+                assignment_counts[child.id] = assignment_counts.get(child.id, 0) + 1
+            elif isinstance(child, (ast.Global, ast.Nonlocal)):
+                declared_outer_names.update(child.names)
+
+        known_lengths: dict[str, tuple[tuple[int, int], int]] = {}
+        for statement in getattr(node, "body", []):
+            if isinstance(statement, ast.Assign):
+                targets = statement.targets
+                value = statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                targets = [statement.target]
+                value = statement.value
+            else:
+                continue
+
+            key_bits, confidence = self._deduce_byte_key_length(value)
+            if key_bits not in (128, 192, 256) or confidence != "CONFIRMED":
+                continue
+            assignment_position = (
+                getattr(statement, "end_lineno", statement.lineno),
+                getattr(statement, "end_col_offset", statement.col_offset),
+            )
+            for target in targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and assignment_counts.get(target.id) == 1
+                    and target.id not in declared_outer_names
+                ):
+                    known_lengths[target.id] = (assignment_position, key_bits)
+        return known_lengths
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._visit_scoped_node(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        outer_key_lengths = self._key_byte_lengths
+        self._key_byte_lengths = {}
+        try:
+            self.generic_visit(node)
+        finally:
+            self._key_byte_lengths = outer_key_lengths
 
     def _get_evidence(self, lineno: int) -> str:
         if 1 <= lineno <= len(self.source_lines):
@@ -150,7 +239,27 @@ class _CryptoAstVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         # Check function call
+        findings_before = len(self.findings)
         self._analyze_call(node)
+        if len(self.findings) > findings_before:
+            function_line = getattr(node.func, "lineno", getattr(node, "lineno", 1))
+            source_line = self.source_lines[function_line - 1]
+            byte_column = getattr(node.func, "col_offset", node.col_offset)
+            char_column = len(
+                source_line.encode("utf-8")[:byte_column].decode("utf-8")
+            )
+            end_line = getattr(node.func, "end_lineno", function_line)
+            end_column = None
+            if end_line == function_line:
+                end_source_line = self.source_lines[function_line - 1]
+                end_byte_column = getattr(node.func, "end_col_offset", None)
+                if end_byte_column is not None:
+                    end_column = len(
+                        end_source_line.encode("utf-8")[:end_byte_column].decode("utf-8")
+                    )
+            for finding in self.findings[findings_before:]:
+                finding._source_column = char_column
+                finding._source_end_column = end_column
         self.generic_visit(node)
 
     def _resolve_callable_name(self, func_node: ast.AST) -> tuple[str, str]:
@@ -316,13 +425,21 @@ class _CryptoAstVisitor(ast.NodeVisitor):
 
 
         # ── 2. ECC / ECDSA / ECDH ───────────────────────────────────────────
-        # cryptography: ec.generate_private_key(curve, ...)
+        # Key generation alone does not establish whether an EC key is used for
+        # signing or key agreement.
         if (
-            (attr == "generate_private_key" and ("ec" in base.lower() or base.endswith(".ec")))
-            or full_call.endswith("ec.generate_private_key")
+            (
+                attr == "generate_private_key"
+                and (
+                    base.casefold() == "ec"
+                    or base.casefold().endswith(".ec")
+                )
+            )
+            or full_call.casefold() == "ec.generate_private_key"
+            or full_call.casefold().endswith(".ec.generate_private_key")
         ):
             curve, confidence = self._extract_ec_curve(node)
-            profile = self.classifier.get_profile("ECDSA")
+            profile = self.classifier.get_profile("ECC")
             details = f"EC key pair generation with curve {curve or 'UNKNOWN'}"
             self.findings.append(
                 AstFinding(
@@ -330,7 +447,7 @@ class _CryptoAstVisitor(ast.NodeVisitor):
                     line_number=lineno,
                     language="python",
                     matched_api="ec.generate_private_key",
-                    algorithm="ECDSA",
+                    algorithm="ECC",
                     risk_level=profile.level,
                     replacement=profile.replacement,
                     evidence=evidence,
@@ -384,16 +501,26 @@ class _CryptoAstVisitor(ast.NodeVisitor):
             return
 
         # PyCryptodome: ECC.generate(curve=...)
-        if (attr == "generate" and ("ECC" in base or base.endswith(".ECC"))) or full_call.endswith("ECC.generate"):
+        if (
+            (
+                attr == "generate"
+                and (
+                    base.casefold() == "ecc"
+                    or base.casefold().endswith(".ecc")
+                )
+            )
+            or full_call.casefold() == "ecc.generate"
+            or full_call.casefold().endswith(".ecc.generate")
+        ):
             curve, confidence = self._extract_ecc_curve_pycryptodome(node)
-            profile = self.classifier.get_profile("ECDSA")
+            profile = self.classifier.get_profile("ECC")
             self.findings.append(
                 AstFinding(
                     file_path=self.file_path,
                     line_number=lineno,
                     language="python",
                     matched_api="ECC.generate",
-                    algorithm="ECDSA",
+                    algorithm="ECC",
                     risk_level=profile.level,
                     replacement=profile.replacement,
                     evidence=evidence,
@@ -410,13 +537,15 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # PyCryptodome: AES.new(key, mode, ...)
         if (attr == "new" and ("AES" in base or base.endswith(".AES"))) or full_call.endswith("AES.new"):
             key_size, confidence = self._extract_aes_key_size_from_new(node)
-            if key_size == 256:
-                algo = "AES-256"
-            elif key_size == 128:
+            assumed_default = False
+            if key_size in (128, 192, 256):
+                algo = f"AES-{key_size}"
+            elif CONSERVATIVE_AES_DEFAULT:
                 algo = "AES-128"
+                confidence = "INFERRED"
+                assumed_default = True
             else:
-                # Conservative fallback if size cannot be statically deduced
-                algo = "AES-128"
+                algo = "AES-UNKNOWN"
                 confidence = "INFERRED"
 
             profile = self.classifier.get_profile(algo)
@@ -434,7 +563,17 @@ class _CryptoAstVisitor(ast.NodeVisitor):
                     confidence=confidence,
                     key_size=key_size,
                     parameters={"key_bits": key_size},
-                    details=f"AES cipher construction with key size {key_size if key_size else 'UNKNOWN (inferred 128-bit)'}",
+                    assumed_default=assumed_default,
+                    details=(
+                        f"AES cipher construction with {key_size}-bit key"
+                        if key_size is not None
+                        else (
+                            "AES cipher construction; reported as inferred AES-128 "
+                            "by conservative default"
+                            if assumed_default
+                            else "AES cipher construction with unknown key size"
+                        )
+                    ),
                 )
             )
             return
@@ -442,12 +581,15 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         # cryptography: algorithms.AES(key)
         if attr == "AES" or full_call.endswith("algorithms.AES") or full_call == "AES":
             key_size, confidence = self._extract_aes_key_size_from_cryptography(node)
-            if key_size == 256:
-                algo = "AES-256"
-            elif key_size == 128:
+            assumed_default = False
+            if key_size in (128, 192, 256):
+                algo = f"AES-{key_size}"
+            elif CONSERVATIVE_AES_DEFAULT:
                 algo = "AES-128"
+                confidence = "INFERRED"
+                assumed_default = True
             else:
-                algo = "AES-128"
+                algo = "AES-UNKNOWN"
                 confidence = "INFERRED"
 
             profile = self.classifier.get_profile(algo)
@@ -465,7 +607,17 @@ class _CryptoAstVisitor(ast.NodeVisitor):
                     confidence=confidence,
                     key_size=key_size,
                     parameters={"key_bits": key_size},
-                    details=f"cryptography algorithms.AES cipher with key size {key_size if key_size else 'UNKNOWN (inferred 128-bit)'}",
+                    assumed_default=assumed_default,
+                    details=(
+                        f"cryptography algorithms.AES cipher with {key_size}-bit key"
+                        if key_size is not None
+                        else (
+                            "cryptography algorithms.AES cipher; reported as inferred "
+                            "AES-128 by conservative default"
+                            if assumed_default
+                            else "cryptography algorithms.AES cipher with unknown key size"
+                        )
+                    ),
                 )
             )
             return
@@ -585,15 +737,33 @@ class _CryptoAstVisitor(ast.NodeVisitor):
         if node is None:
             return None, "UNKNOWN"
 
+        if isinstance(node, ast.Name):
+            known_key = self._key_byte_lengths.get(node.id)
+            if known_key is not None:
+                assignment_position, key_bits = known_key
+                use_position = (node.lineno, node.col_offset)
+                if assignment_position < use_position:
+                    return key_bits, "CONFIRMED"
+
         # Direct bytes constant: b"..."
         val = self._extract_constant_val(node)
-        if isinstance(val, (bytes, str)):
+        if isinstance(val, bytes):
             length = len(val) * 8
             if length in (128, 192, 256):
                 return length, "CONFIRMED"
 
-        # get_random_bytes(16) or urandom(32)
-        if isinstance(node, ast.Call):
+        # Only recognize known byte-generating APIs; arbitrary calls accepting
+        # a size-like argument do not establish the returned key length.
+        if isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
+            base, attr = self._resolve_callable_name(node.func)
+            callable_name = f"{base}.{attr}" if attr else base
+            known_byte_generators = {
+                "Crypto.Random.get_random_bytes",
+                "os.urandom",
+            }
+            if callable_name not in known_byte_generators:
+                return None, "UNKNOWN"
+
             arg_val = self._extract_constant_val(node.args[0]) if node.args else None
             if isinstance(arg_val, int):
                 length = arg_val * 8

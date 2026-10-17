@@ -15,3 +15,6 @@ psutil>=5.9
 # Visualization & Data Analysis
 matplotlib>=3.8
 pandas>=2.0
+
+# Demo cryptographic API
+cryptography>=44.0

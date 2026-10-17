@@ -44,6 +44,10 @@ Organizations cannot migrate cryptography they have not discovered. Quantum comp
                                                      • Platform D: Custom Innovation
 ```
 
+In unified Python scanning, regex findings supplement AST results for APIs the AST
+does not yet recognize. The fallback masks comments and string literals and avoids
+re-reporting APIs already represented by an AST finding.
+
 ---
 
 ## 2. PS-P2 Risk Taxonomy & Migration Rules
@@ -69,7 +73,7 @@ In accordance with the Post-Quantum Cryptography Track rules ([`Problem_Statment
 - **Platform C (Embedded/IoT Target)**: Microcontroller emulator (ARM Cortex-M / Raspberry Pi Zero, Phase 2 continuation).
 - **Custom Platform D (Innovation)**: **Selective High-Risk AST Scanner**
   - **Input-Size Boundary (not an OS memory ceiling)**: Files exceeding 64 MB are rejected before parsing (`processors/platform_d.json`). This is a *per-file input-size limit*, not a process-wide heap ceiling. Total Python process RSS will always exceed 64 MB due to the interpreter and shared libraries. Python heap allocations during scanning are measured at < 210 KB via `tracemalloc` on benchmark fixtures.
-  - **Selective Strategy (`high_risk_priority`)**: Quick regex pre-scan checks each Python file for asymmetric (HIGH-risk) keywords. Files containing RSA/ECC patterns receive full AST parsing (eliminating comment/string FPs); symmetric-only files use fast regex instead. This is the actual implemented trade-off between parsing precision and CPU overhead.
+  - **Selective Strategy (`high_risk_priority`)**: A tokenizer-aware pre-scan ignores Python comments and non-API strings when routing asymmetric files to AST; symmetric-only files use tokenizer-aware regex scanning. The benchmark reports precision and recall for regex-only, AST-enriched, and Platform D strategies alongside runtime.
   - **Pipeline & Concurrency**: Single-worker streaming iterator (`max_workers=1`).
 
 All target platform configurations are exported in standard JSON format under [`processors/`](processors/):
@@ -138,15 +142,20 @@ Run the comprehensive unit, regression, and integration test suite:
 python -m pytest tests/ -v
 ```
 
-### Test Suite Structure (130 Passing Tests)
-- `tests/test_regex_scanner.py`: 48 tests (Pattern detection across Python, Java, C, boundary conditions, empty dirs, invalid encodings).
-- `tests/test_risk_classifier.py`: 24 tests (PS-P2 taxonomy classification, aliases, purpose-aware recommendations).
-- `tests/test_platform_d.py`: 23 tests (Platform D profile validation, input-size limit guard, Platform B benchmark, high_risk_priority selective strategy, ground-truth subset/unrelated-dir/duplicate-basename filtering).
-- `tests/test_ast_scanner.py`: 14 tests (Comment/string FP elimination, key-size extraction, ECC curves, syntax error handling).
-- `tests/test_benchmark.py`: 13 tests (Precision, recall, F1, zero-division guards, duplicate handling, environment capture, Platform B result, subset scan, unrelated dir, and multi-subdir duplicate filename regression tests).
-- `tests/test_inventory_report.py`: 5 tests (JSON/Markdown report schemas, secret and API-key redaction).
-- `tests/test_unified_scanner.py`: 2 tests (Cross-language scanning and comparative differential analysis).
-- `tests/test_end_to_end.py`: 1 test (End-to-end integration across scanner, classifier, reporting, and benchmarking including Platform B and D).
+### Latest Verified Test Run
+The latest full run collected **222 pytest cases**; **222 passed**, with **0 failed, 0 skipped, and 0 deselected**. There were no collection errors. These results are from the latest verified run, not a guarantee for future runs.
+
+Counts below are collected pytest cases grouped by test module (including parameterized cases), not counts of test functions. The modules account for the complete 222-case suite.
+
+- `tests/test_ast_scanner.py`: 32 cases — AST detection, comment/string false-positive filtering, AES key-size inference including unresolved and conservative cases, generic ECC key generation, explicit ECDSA/ECDH operations, and syntax errors.
+- `tests/test_benchmark.py`: 33 cases — precision/recall/F1, exact algorithm matching, exact-path and basename behavior, file coverage and outcomes, and benchmark result/export consistency.
+- `tests/test_unified_scanner.py`: 19 cases — cross-language scanning, regex fallback for unsupported APIs, source-aware AST/regex deduplication (including multiple same-line AES calls), multiline calls, comment/string masking, and best-effort behavior on tokenization failure.
+- `tests/test_platform_d.py`: 30 cases — platform configuration and scanning, Platform D selective high-risk strategy, input-size limits, explicit file-processing outcomes, and path/fixture-identity ground-truth filtering.
+- `tests/test_regex_scanner.py`: 64 cases — pattern detection across Python, Java, and C; comment/string-aware detection, multiline calls, line reporting, malformed Python, and boundary/error cases.
+- `tests/test_risk_classifier.py`: 27 cases — risk taxonomy, aliases, recommendations, and preservation of unknown AES variants and unknown risk.
+- `tests/test_inventory_report.py`: 9 cases — JSON and Markdown report structures, explicit file-outcome counts, serialization, evidence sanitization, and preservation of unknown AES variants.
+- `tests/test_main.py`: 6 cases — inventory counts for successful, failed, skipped, and mixed file outcomes, including pipeline report generation.
+- `tests/test_end_to_end.py`: 2 cases — scanner-to-report/metrics regression for unresolved AES and complete pipeline execution.
 
 
 ---
@@ -155,25 +164,27 @@ python -m pytest tests/ -v
 
 > **Transparency Note**: The hackathon organizers' official sample repository and evaluation ground truth are **withheld until judging** (Problem Statement, Page 15). The figures below represent **actual measured values** generated by `python main.py --scan-dir tests/fixtures --runs 10 --output-dir results` on this machine. No values are simulated or fabricated.
 
+Benchmark scores require an exact source-line match and exact case-insensitive algorithm-name match (`line_match_tolerance=0`); ECDSA, ECDH, and generic ECC findings are not interchangeable. Each scanner records a per-file outcome (`scanned`, `failed`, or `skipped`), and benchmark results expose unique file counts and outcome details. Incomplete scans are labeled `coverage_status="partial"` rather than presenting their scores as fully verified; a benchmark with no scannable files is rejected. Direct empty-input metric calculations are labeled `coverage_status="unverified"`.
+
 ### Accuracy & Detection Metrics
 | Mode / Target Platform | Total Detected | True Positives (TP) | False Positives (FP) | False Negatives (FN) | Precision | Recall | F1 Score |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Regex Baseline (Layer 1)** | 68 | 13 | 55 | 5 | **19.12%** | **72.22%** | **30.23%** |
-| **AST-Enriched (Layer 2)** | 47 | 17 | 30 | 1 | **36.17%** | **94.44%** | **52.31%** |
-| **Platform B (Constrained Server)** | 47 | 17 | 30 | 1 | **36.17%** | **94.44%** | **52.31%** |
-| **Platform D (Selective High-Risk AST)** | 60 | 18 | 42 | 0 | **30.00%** | **100.00%** | **46.15%** |
+| **Regex Baseline (Layer 1)** | 49 | 11 | 38 | 7 | **22.45%** | **61.11%** | **32.84%** |
+| **AST-Enriched (Layer 2)** | 55 | 16 | 39 | 2 | **29.09%** | **88.89%** | **43.84%** |
+| **Platform B (Constrained Server)** | 55 | 16 | 39 | 2 | **29.09%** | **88.89%** | **43.84%** |
+| **Platform D (Selective High-Risk AST)** | 49 | 16 | 33 | 2 | **32.65%** | **88.89%** | **47.76%** |
 
 > **Platform B note**: measured on the **host machine** under `max_workers=1, memory_limit_mb=512` configuration; no OS-level CPU or memory virtualisation is applied.
-> **Platform D note**: `high_risk_priority` strategy — AST parse for files with asymmetric (HIGH-risk) keywords, fast regex for symmetric-only files. Achieves 100% recall (18/18) because the quick pre-scan correctly routes all asymmetric and mixed files through AST. Higher FP count vs pure-AST because symmetric-only files use regex (no comment suppression).
+> **Platform D note**: `high_risk_priority` strategy — AST parse for files with asymmetric (HIGH-risk) code, tokenizer-aware regex for symmetric-only files. The reported results were regenerated after the tokenizer-aware regex changes.
 
 
 ### Performance & Resource Usage (10 Iterations)
 | Target Platform Mode | Mean Runtime | Runtime StdDev | Min / Max Runtime | Peak Memory (tracemalloc) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Platform A — Regex Baseline** | 30.88 ms | 3.10 ms | 26.87 / 37.14 ms | 186.39 KB |
-| **Platform A — AST-Enriched** | 26.30 ms | 2.45 ms | 22.87 / 29.13 ms | 199.73 KB |
-| **Platform B — Constrained Server** | 27.22 ms | 2.26 ms | 23.62 / 30.02 ms | 197.89 KB |
-| **Platform D — Selective High-Risk AST** | 49.85 ms | 13.40 ms | 30.83 / 67.56 ms | 204.59 KB |
+| **Platform A — Regex Baseline** | 11.76 ms | 1.92 ms | 10.13 / 16.70 ms | 202.03 KB |
+| **Platform A — AST-Enriched** | 19.71 ms | 1.30 ms | 17.69 / 21.92 ms | 227.99 KB |
+| **Platform B — Constrained Server** | 19.59 ms | 1.02 ms | 17.72 / 20.81 ms | 224.01 KB |
+| **Platform D — Selective High-Risk AST** | 17.60 ms | 1.70 ms | 15.87 / 20.89 ms | 216.70 KB |
 
 > **Memory note**: `tracemalloc` measures Python-heap allocations only. Total process RSS (Python interpreter + shared libs) exceeds 64 MB regardless of the Platform D input-size boundary.
 
@@ -184,7 +195,7 @@ python -m pytest tests/ -v
 
 ## 8. Known Limitations & Operational Assumptions
 
-1. **Dynamic / Runtime Values**: Variables computed dynamically at runtime (e.g. `RSA.generate(key_size_from_db)`) cannot be statically resolved and are explicitly marked with `confidence="UNKNOWN"` per competition guidelines.
+1. **Dynamic / Runtime Values**: Variables computed dynamically at runtime (e.g. RSA and AES key sizes) cannot be statically resolved. AES calls with unresolved key size are reported as `AES-UNKNOWN` with `confidence="INFERRED"` and `UNKNOWN` risk by default. AES-192 retains its distinct algorithm label but has `UNKNOWN` risk because the current project taxonomy defines no AES-192 risk policy. `CONSERVATIVE_AES_DEFAULT` can be enabled only when competition rules require an assumed AES-128 report, which is marked with `assumed_default=true` in JSON and Markdown. Benchmark matching remains exact by algorithm label.
 2. **Java & C Comments**: Java and C/C++ detection is performed via the Layer 1 Regex engine; keyword identifiers in inactive comments or strings in those languages remain flagged until dedicated tree-sitter parsers are linked.
 3. **Organizers' Hidden Repository**: The official competition repository will be evaluated upon submission on the hackathon evaluation harness.
 

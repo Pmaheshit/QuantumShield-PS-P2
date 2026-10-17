@@ -105,9 +105,62 @@ key = ec.generate_private_key(ec.SECP384R1())
 '''
         findings = ast_scanner.scan_source(code)
         assert len(findings) == 1
-        assert findings[0].algorithm == "ECDSA"
+        assert findings[0].algorithm == "ECC"
+        assert findings[0].risk_level == RiskLevel.HIGH
         assert findings[0].curve == "SECP384R1"
         assert findings[0].confidence == "CONFIRMED"
+
+    def test_ec_key_generation_does_not_assume_signing_or_key_agreement(
+        self, ast_scanner: PythonAstScanner
+    ):
+        code = """
+from cryptography.hazmat.primitives.asymmetric import ec
+private_key = ec.generate_private_key(ec.SECP256R1())
+"""
+        findings = ast_scanner.scan_source(code)
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "ECC"
+        assert findings[0].risk_level == RiskLevel.HIGH
+        assert findings[0].matched_api == "ec.generate_private_key"
+
+    def test_pycryptodome_ecc_generation_is_generic_ecc(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            'from Crypto.PublicKey import ECC\nkey = ECC.generate(curve="P-256")\n'
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "ECC"
+        assert findings[0].risk_level == RiskLevel.HIGH
+        assert findings[0].matched_api == "ECC.generate"
+
+    @pytest.mark.parametrize(
+        "call",
+        (
+            "not_ec.generate_private_key(curve)",
+            "not_ECC.generate(curve='P-256')",
+        ),
+    )
+    def test_unrelated_names_do_not_match_ecc_generation(
+        self, ast_scanner: PythonAstScanner, call: str
+    ):
+        assert ast_scanner.scan_source(f"key = {call}\n") == []
+
+    def test_explicit_ecdsa_and_ecdh_operations_keep_specific_labels(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from cryptography.hazmat.primitives.asymmetric import ec\n"
+            "signature = private_key.sign(message, ec.ECDSA(hash_algorithm))\n"
+            "shared_key = private_key.exchange(ec.ECDH(), peer_public_key)\n"
+        )
+
+        assert [(finding.algorithm, finding.risk_level) for finding in findings] == [
+            ("ECDSA", RiskLevel.HIGH),
+            ("ECDH", RiskLevel.HIGH),
+        ]
 
     def test_aes_bytes_key_size_deduced(self, ast_scanner: PythonAstScanner):
         code = '''
@@ -130,6 +183,176 @@ cipher = AES.new(b"0123456789abcdef0123456789abcdef", AES.MODE_GCM)
         assert findings[0].algorithm == "AES-256"
         assert findings[0].key_size == 256
         assert findings[0].confidence == "CONFIRMED"
+
+    @pytest.mark.parametrize(
+        ("key", "expected_algorithm", "expected_size"),
+        [
+            ('b"0123456789abcdef"', "AES-128", 128),
+            ('b"0123456789abcdef01234567"', "AES-192", 192),
+            ('b"0123456789abcdef0123456789abcdef"', "AES-256", 256),
+        ],
+    )
+    def test_aes_key_size_variants_are_reported_exactly(
+        self, ast_scanner: PythonAstScanner, key: str, expected_algorithm: str,
+        expected_size: int,
+    ):
+        findings = ast_scanner.scan_source(
+            f"from Crypto.Cipher import AES\ncipher = AES.new({key}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == expected_algorithm
+        assert findings[0].key_size == expected_size
+        assert findings[0].confidence == "CONFIRMED"
+        assert findings[0].assumed_default is False
+
+    def test_unknown_aes_key_is_not_assigned_a_variant_by_default(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from Crypto.Cipher import AES\ncipher = AES.new(key_from_kms, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].confidence == "INFERRED"
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+        assert findings[0].assumed_default is False
+        assert findings[0].to_dict()["assumed_default"] is False
+
+    def test_conservative_aes_default_is_disabled(self):
+        import src.scanner.ast_scanner as ast_scanner_module
+
+        assert ast_scanner_module.CONSERVATIVE_AES_DEFAULT is False
+
+    @pytest.mark.parametrize(
+        "key_expression",
+        [
+            "key_from_kms",
+            "load_key()",
+            "settings.encryption_key",
+        ],
+    )
+    def test_dynamic_aes_key_sources_remain_unresolved(
+        self, ast_scanner: PythonAstScanner, key_expression: str
+    ):
+        findings = ast_scanner.scan_source(
+            f"from Crypto.Cipher import AES\ncipher = AES.new({key_expression}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+
+    @pytest.mark.parametrize(
+        "key_expression",
+        [
+            'make_key(16)',
+            'key_factory(size=16)',
+            '"0123456789abcdef"',
+        ],
+    )
+    def test_unverified_key_expressions_do_not_confirm_aes_size(
+        self, ast_scanner: PythonAstScanner, key_expression: str
+    ):
+        findings = ast_scanner.scan_source(
+            f"from Crypto.Cipher import AES\ncipher = AES.new({key_expression}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
+
+    @pytest.mark.parametrize(
+        ("imports", "key_expression", "expected_size"),
+        [
+            ("import os\n", "os.urandom(24)", 192),
+            ("from Crypto.Random import get_random_bytes\n", "get_random_bytes(32)", 256),
+        ],
+    )
+    def test_known_random_byte_apis_confirm_requested_key_size(
+        self, ast_scanner: PythonAstScanner, imports, key_expression, expected_size
+    ):
+        findings = ast_scanner.scan_source(
+            f"{imports}from Crypto.Cipher import AES\n"
+            f"cipher = AES.new({key_expression}, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == f"AES-{expected_size}"
+        assert findings[0].key_size == expected_size
+        assert findings[0].confidence == "CONFIRMED"
+
+    @pytest.mark.parametrize(
+        ("key_bytes", "expected_size"),
+        [(16, 128), (24, 192), (32, 256)],
+    )
+    def test_local_random_byte_assignment_confirms_aes_key_size(
+        self, ast_scanner: PythonAstScanner, key_bytes: int, expected_size: int
+    ):
+        findings = ast_scanner.scan_source(
+            "from Crypto.Random import get_random_bytes\n"
+            "from Crypto.Cipher import AES\n"
+            "def encrypt():\n"
+            f"    key = get_random_bytes({key_bytes})\n"
+            "    return AES.new(key, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == f"AES-{expected_size}"
+        assert findings[0].key_size == expected_size
+        assert findings[0].confidence == "CONFIRMED"
+
+    def test_reassigned_random_key_is_not_inferred_from_one_assignment(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from Crypto.Random import get_random_bytes\n"
+            "from Crypto.Cipher import AES\n"
+            "def encrypt(change_key):\n"
+            "    key = get_random_bytes(16)\n"
+            "    if change_key:\n"
+            "        key = get_random_bytes(32)\n"
+            "    return AES.new(key, AES.MODE_GCM)\n"
+        )
+
+        aes_findings = [finding for finding in findings if finding.matched_api == "AES.new"]
+        assert len(aes_findings) == 1
+        assert aes_findings[0].algorithm == "AES-UNKNOWN"
+        assert aes_findings[0].key_size is None
+
+    def test_conservative_aes_default_is_explicitly_marked(
+        self, ast_scanner: PythonAstScanner, monkeypatch
+    ):
+        import src.scanner.ast_scanner as ast_scanner_module
+
+        monkeypatch.setattr(ast_scanner_module, "CONSERVATIVE_AES_DEFAULT", True)
+        findings = ast_scanner.scan_source(
+            "from Crypto.Cipher import AES\ncipher = AES.new(key_from_kms, AES.MODE_GCM)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-128"
+        assert findings[0].confidence == "INFERRED"
+        assert findings[0].assumed_default is True
+        assert findings[0].to_dict()["assumed_default"] is True
+
+    def test_cryptography_unknown_aes_key_is_unresolved(
+        self, ast_scanner: PythonAstScanner
+    ):
+        findings = ast_scanner.scan_source(
+            "from cryptography.hazmat.primitives.ciphers import algorithms\n"
+            "cipher = algorithms.AES(key_from_kms)\n"
+        )
+
+        assert len(findings) == 1
+        assert findings[0].algorithm == "AES-UNKNOWN"
+        assert findings[0].key_size is None
+        assert findings[0].confidence == "INFERRED"
+        assert findings[0].risk_level == RiskLevel.UNKNOWN
 
 
 class TestAstAliasingAndImports:
