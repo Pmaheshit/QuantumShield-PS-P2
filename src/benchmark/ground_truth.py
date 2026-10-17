@@ -1,16 +1,16 @@
-"""
+﻿"""
 src/benchmark/ground_truth.py
-─────────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Ground-truth label repository for QuantumShield PS-P2 benchmark validation.
 
 Contains exact expected cryptographic findings for mock test fixtures.
 Labels are explicitly defined per fixture file with:
-  • file_path
-  • line_number
-  • algorithm
-  • risk_level
-  • is_comment_or_docstring (for false-positive auditing)
-  • is_genuine_api_call
+  â€¢ file_path
+  â€¢ line_number
+  â€¢ algorithm
+  â€¢ risk_level
+  â€¢ is_comment_or_docstring (for false-positive auditing)
+  â€¢ is_genuine_api_call
 
 Note: In accordance with the PS-P2 competition rules, the organizers' official
 multi-language repository ground truth is withheld until final judging.
@@ -36,10 +36,40 @@ class ExpectedFinding:
 
 # Ground truth labels for each Python fixture
 MOCK_FIXTURE_GROUND_TRUTH: dict[str, list[ExpectedFinding]] = {
-    # ── snippet_clean.py: 0 genuine calls, 0 crypto comments
+    # Verified mock fixture labels for snippet_ecdsa.java; hash-checked below.
+    "snippet_ecdsa.java": [
+        ExpectedFinding("snippet_ecdsa.java", 15, "RSA", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_ecdsa.java", 22, "RSA", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_ecdsa.java", 29, "ECC", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_ecdsa.java", 30, "ECC", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_ecdsa.java", 37, "ECDSA", "HIGH", is_genuine_call=True, purpose="signature"),
+        ExpectedFinding("snippet_ecdsa.java", 46, "ECDH", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_ecdsa.java", 54, "AES-UNKNOWN", "MODERATE", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_ecdsa.java", 55, "AES-128", "MODERATE", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_ecdsa.java", 61, "AES-UNKNOWN", "MODERATE", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_ecdsa.java", 69, "AES-UNKNOWN", "MODERATE", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_ecdsa.java", 70, "AES-256", "LOWER", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_ecdsa.java", 77, "SHA-256", "LOWER", is_genuine_call=True, purpose="hash"),
+    ],
+
+    # Verified mock fixture labels for snippet_aes.c; hash-checked below.
+    "snippet_aes.c": [
+        ExpectedFinding("snippet_aes.c", 18, "RSA", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_aes.c", 21, "RSA", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_aes.c", 38, "ECC", "HIGH", is_genuine_call=True, purpose="key_exchange"),
+        ExpectedFinding("snippet_aes.c", 45, "ECDSA", "HIGH", is_genuine_call=True, purpose="signature"),
+        ExpectedFinding("snippet_aes.c", 56, "AES-128", "MODERATE", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_aes.c", 74, "AES-256", "LOWER", is_genuine_call=True, purpose="cipher"),
+        ExpectedFinding("snippet_aes.c", 90, "SHA-256", "LOWER", is_genuine_call=True, purpose="hash"),
+        ExpectedFinding("snippet_aes.c", 91, "SHA-256", "LOWER", is_genuine_call=True, purpose="hash"),
+        ExpectedFinding("snippet_aes.c", 92, "SHA-256", "LOWER", is_genuine_call=True, purpose="hash"),
+        ExpectedFinding("snippet_aes.c", 95, "SHA-256", "LOWER", is_genuine_call=True, purpose="hash"),
+    ],
+
+    # â”€â”€ snippet_clean.py: 0 genuine calls, 0 crypto comments
     "snippet_clean.py": [],
 
-    # ── snippet_edge_cases.py:
+    # â”€â”€ snippet_edge_cases.py:
     # Contains comments on lines 5, 7, 15
     # Contains string literal on line 21
     # Contains import on line 27
@@ -50,7 +80,7 @@ MOCK_FIXTURE_GROUND_TRUTH: dict[str, list[ExpectedFinding]] = {
         ExpectedFinding("snippet_edge_cases.py", 42, "RSA", "HIGH", is_genuine_call=True, purpose="key_exchange"),
     ],
 
-    # ── snippet_rsa.py:
+    # â”€â”€ snippet_rsa.py:
     # Line 13: rsa.generate_private_key (genuine)
     # Line 26: hashes.SHA256 (genuine)
     # Line 29: hashes.SHA256 (genuine)
@@ -66,7 +96,7 @@ MOCK_FIXTURE_GROUND_TRUTH: dict[str, list[ExpectedFinding]] = {
         ExpectedFinding("snippet_rsa.py", 48, "RSA", "HIGH", is_genuine_call=True, purpose="key_exchange"),
     ],
 
-    # ── snippet_ecc.py:
+    # â”€â”€ snippet_ecc.py:
     # Line 12: ec.generate_private_key(ec.SECP256R1()) (generic EC key generation)
     # Line 18: ec.ECDSA (genuine signature)
     # Line 18: hashes.SHA256 (genuine hash)
@@ -80,7 +110,7 @@ MOCK_FIXTURE_GROUND_TRUTH: dict[str, list[ExpectedFinding]] = {
         ExpectedFinding("snippet_ecc.py", 32, "ECC", "HIGH", is_genuine_call=True),
     ],
 
-    # ── snippet_aes.py:
+    # â”€â”€ snippet_aes.py:
     # Line 15: AES.new (AES-128)
     # Line 32: AES.new (AES-256)
     # Line 43: hashlib.sha256
@@ -96,6 +126,8 @@ MOCK_FIXTURE_GROUND_TRUTH: dict[str, list[ExpectedFinding]] = {
 # Stable content identities prevent an unrelated same-named file from inheriting
 # labels for the controlled mock fixture. Update a digest when that fixture changes.
 _FIXTURE_SHA256 = {
+    "snippet_aes.c": "c2965b33f2b072832e63bb7789713a81d5f54352163f59a369e4d237b02e0c59",
+    "snippet_ecdsa.java": "9b386d67e0d834f6c130f9c5ac6dacb72478da9f92d56ac971bc928c1c051ff1",
     "snippet_edge_cases.py": "93aafca910238bb181b180644b45717ed86da21f5eb4bfe58a56d22aaeb6bc8f",
     "snippet_rsa.py": "b28a104bf676095afb4b042326daf954739d3cc3507b821a2ac9aa41fe4dd8b8",
     "snippet_ecc.py": "202c086f25d13440776ef416739b29646bb3da132e3fce5e246d6832e0ea4653",
@@ -118,3 +150,4 @@ def get_ground_truth(file_name: str) -> list[ExpectedFinding]:
 def get_all_ground_truth() -> dict[str, list[ExpectedFinding]]:
     """Retrieve all ground truth mappings."""
     return MOCK_FIXTURE_GROUND_TRUTH
+
