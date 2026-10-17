@@ -143,16 +143,16 @@ python -m pytest tests/ -v
 ```
 
 ### Latest Verified Test Run
-The latest full run collected **222 pytest cases**; **222 passed**, with **0 failed, 0 skipped, and 0 deselected**. There were no collection errors. These results are from the latest verified run, not a guarantee for future runs.
+The latest full run collected **239 pytest cases**; **239 passed**, with **0 failed, 0 skipped, and 0 deselected**. There were no collection errors. These results are from the latest verified run, not a guarantee for future runs.
 
-Counts below are collected pytest cases grouped by test module (including parameterized cases), not counts of test functions. The modules account for the complete 222-case suite.
+Counts below are collected pytest cases grouped by test module (including parameterized cases), not counts of test functions. The modules account for the complete 239-case suite.
 
-- `tests/test_ast_scanner.py`: 32 cases — AST detection, comment/string false-positive filtering, AES key-size inference including unresolved and conservative cases, generic ECC key generation, explicit ECDSA/ECDH operations, and syntax errors.
+- `tests/test_ast_scanner.py`: 38 cases — AST detection, comment/string false-positive filtering, AES key-size inference including unresolved and conservative cases, generic ECC key generation, explicit ECDSA/ECDH operations, and syntax errors.
 - `tests/test_benchmark.py`: 33 cases — precision/recall/F1, exact algorithm matching, exact-path and basename behavior, file coverage and outcomes, and benchmark result/export consistency.
-- `tests/test_unified_scanner.py`: 19 cases — cross-language scanning, regex fallback for unsupported APIs, source-aware AST/regex deduplication (including multiple same-line AES calls), multiline calls, comment/string masking, and best-effort behavior on tokenization failure.
+- `tests/test_unified_scanner.py`: 22 cases — cross-language scanning, regex fallback for unsupported APIs, source-aware AST/regex deduplication (including multiple same-line AES calls), multiline calls, comment/string masking, and best-effort behavior on tokenization failure.
 - `tests/test_platform_d.py`: 30 cases — platform configuration and scanning, Platform D selective high-risk strategy, input-size limits, explicit file-processing outcomes, and path/fixture-identity ground-truth filtering.
-- `tests/test_regex_scanner.py`: 64 cases — pattern detection across Python, Java, and C; comment/string-aware detection, multiline calls, line reporting, malformed Python, and boundary/error cases.
-- `tests/test_risk_classifier.py`: 27 cases — risk taxonomy, aliases, recommendations, and preservation of unknown AES variants and unknown risk.
+- `tests/test_regex_scanner.py`: 70 cases — pattern detection across Python, Java, and C; comment/string-aware detection, multiline calls, line reporting, malformed Python, and boundary/error cases.
+- `tests/test_risk_classifier.py`: 29 cases — risk taxonomy, aliases, recommendations, and preservation of unknown AES variants and unknown risk.
 - `tests/test_inventory_report.py`: 9 cases — JSON and Markdown report structures, explicit file-outcome counts, serialization, evidence sanitization, and preservation of unknown AES variants.
 - `tests/test_main.py`: 6 cases — inventory counts for successful, failed, skipped, and mixed file outcomes, including pipeline report generation.
 - `tests/test_end_to_end.py`: 2 cases — scanner-to-report/metrics regression for unresolved AES and complete pipeline execution.
